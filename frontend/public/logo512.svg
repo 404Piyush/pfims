@@ -1,0 +1,23 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1E40AF;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#gradient)" stroke="#ffffff" stroke-width="8"/>
+  
+  <!-- Dollar sign -->
+  <text x="256" y="320" font-family="Arial, sans-serif" font-size="200" font-weight="bold" text-anchor="middle" fill="white">$</text>
+  
+  <!-- Chart bars -->
+  <rect x="100" y="380" width="20" height="50" fill="white" opacity="0.8"/>
+  <rect x="130" y="360" width="20" height="70" fill="white" opacity="0.8"/>
+  <rect x="160" y="340" width="20" height="90" fill="white" opacity="0.8"/>
+  
+  <rect x="332" y="370" width="20" height="60" fill="white" opacity="0.8"/>
+  <rect x="362" y="350" width="20" height="80" fill="white" opacity="0.8"/>
+  <rect x="392" y="330" width="20" height="100" fill="white" opacity="0.8"/>
+</svg>
