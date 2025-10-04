@@ -87,10 +87,12 @@ router.get('/', [
       if (maxAmount) filter.amount.$lte = parseFloat(maxAmount);
     }
     if (search) {
+      // Escape special regex characters to prevent ReDoS attacks
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { notes: { $regex: search, $options: 'i' } }
+        { title: { $regex: escapedSearch, $options: 'i' } },
+        { description: { $regex: escapedSearch, $options: 'i' } },
+        { notes: { $regex: escapedSearch, $options: 'i' } }
       ];
     }
 

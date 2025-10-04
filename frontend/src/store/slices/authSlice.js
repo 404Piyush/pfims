@@ -24,7 +24,9 @@ export const register = createAsyncThunk(
   async (userData, { rejectWithValue }) => {
     try {
       const response = await authAPI.register(userData);
-      toast.success('Registration successful! Please check your email to verify your account.');
+      // Since email verification is disabled, store the token and treat as logged in
+      localStorage.setItem('token', response.data.token);
+      toast.success('Registration successful! Welcome to PFIMS!');
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || 'Registration failed';
@@ -206,6 +208,10 @@ const authSlice = createSlice({
       })
       .addCase(register.fulfilled, (state, action) => {
         state.isLoading = false;
+        state.isAuthenticated = true;
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+        state.isEmailVerified = true; // Since email verification is disabled
         state.error = null;
       })
       .addCase(register.rejected, (state, action) => {

@@ -66,7 +66,7 @@ router.post('/register', [
       password,
       currency: currency || 'USD',
       timezone: timezone || 'UTC',
-      emailVerificationToken: crypto.randomBytes(32).toString('hex')
+      isEmailVerified: true // Skip email verification for now
     });
 
     await user.save();

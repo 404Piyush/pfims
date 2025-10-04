@@ -99,20 +99,12 @@ const Sidebar = () => {
             'flex items-center transition-opacity duration-300',
             sidebarOpen ? 'opacity-100' : 'opacity-0'
           )}>
-            <div className="flex-shrink-0 h-8 w-8 bg-primary-600 rounded-lg flex items-center justify-center">
-              <svg
-                className="h-5 w-5 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-                />
-              </svg>
+            <div className="flex-shrink-0 h-8 w-8 rounded-lg overflow-hidden">
+              <img
+                src="/logo.png"
+                alt="PFIMS Logo"
+                className="h-8 w-8 object-contain"
+              />
             </div>
             {sidebarOpen && (
               <span className="ml-3 text-xl font-bold text-secondary-900">
@@ -218,20 +210,12 @@ const Sidebar = () => {
       )}>
         {/* Logo */}
         <div className="flex items-center h-16 px-4 border-b border-secondary-200">
-          <div className="flex-shrink-0 h-8 w-8 bg-primary-600 rounded-lg flex items-center justify-center">
-            <svg
-              className="h-5 w-5 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-              />
-            </svg>
+          <div className="flex-shrink-0 h-8 w-8 rounded-lg overflow-hidden">
+            <img
+              src="/logo.png"
+              alt="PFIMS Logo"
+              className="h-8 w-8 object-contain"
+            />
           </div>
           <span className="ml-3 text-xl font-bold text-secondary-900">
             PFIMS

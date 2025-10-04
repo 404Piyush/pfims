@@ -94,9 +94,8 @@ const Register = () => {
       }));
 
       if (registerUser.fulfilled.match(result)) {
-        navigate('/verify-email', { 
-          state: { email: data.email } 
-        });
+        // Since email verification is disabled, redirect directly to dashboard
+        navigate('/');
       }
     } catch (error) {
       console.error('Registration error:', error);
