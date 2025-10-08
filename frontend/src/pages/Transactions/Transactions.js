@@ -125,7 +125,11 @@ const Transactions = () => {
         if (updateTransaction.fulfilled.match(result)) {
           toast.success('Transaction updated successfully!');
         } else {
-          toast.error(result.payload || 'Failed to update transaction');
+          // Ensure we display a string message, not an object
+          const errorMessage = typeof result.payload === 'string' 
+            ? result.payload 
+            : result.payload?.message || 'Failed to update transaction';
+          toast.error(errorMessage);
         }
       } else {
         // Create new transaction
@@ -133,7 +137,11 @@ const Transactions = () => {
         if (createTransaction.fulfilled.match(result)) {
           toast.success('Transaction created successfully!');
         } else {
-          toast.error(result.payload || 'Failed to create transaction');
+          // Ensure we display a string message, not an object
+          const errorMessage = typeof result.payload === 'string' 
+            ? result.payload 
+            : result.payload?.message || 'Failed to create transaction';
+          toast.error(errorMessage);
         }
       }
       
@@ -166,8 +174,37 @@ const Transactions = () => {
   };
 
   const handleExport = () => {
-    // TODO: Implement export functionality
-    console.log('Export transactions');
+    try {
+      // Create CSV content
+      const headers = ['Date', 'Description', 'Category', 'Type', 'Amount', 'Status'];
+      const csvContent = [
+        headers.join(','),
+        ...transactions.map(transaction => [
+          formatDate(transaction.date),
+          `"${transaction.description || transaction.title || ''}"`,
+          `"${transaction.category?.name || transaction.category || 'Uncategorized'}"`,
+          transaction.type,
+          transaction.amount,
+          transaction.status || 'completed'
+        ].join(','))
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `transactions_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success('Transactions exported successfully!');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export transactions');
+    }
   };
 
   const formatCurrency = (amount) => {

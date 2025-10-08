@@ -23,12 +23,28 @@ router.get('/', auth, async (req, res) => {
       .populate('parent', 'name color icon')
       .sort({ order: 1, name: 1 });
 
+    // Add transaction counts to each category
+    const categoriesWithCounts = await Promise.all(
+      categories.map(async (category) => {
+        const transactionCount = await Transaction.countDocuments({
+          category: category._id,
+          user: req.user._id,
+          status: 'completed'
+        });
+
+        return {
+          ...category.toObject(),
+          transactionCount
+        };
+      })
+    );
+
     // Build tree structure
     const categoryTree = await Category.getCategoryTree(req.user._id, type);
 
     res.json({
       message: 'Categories retrieved successfully',
-      categories,
+      categories: categoriesWithCounts,
       categoryTree
     });
 

@@ -236,16 +236,17 @@ router.post('/forgot-password', [
 
     // Generate reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
-    user.passwordResetToken = resetToken;
+    user.passwordResetToken = crypto.createHash('sha256').update(resetToken).digest('hex');
     user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
 
     await user.save();
 
-    // In a real application, send email here
-    console.log(`Password reset token for ${email}: ${resetToken}`);
+    // TODO: Send email with reset token
+    // For now, we'll just return success
+    // console.log(`Password reset token for ${email}: ${resetToken}`);
 
     res.json({
-      message: 'If an account with that email exists, a password reset link has been sent.'
+      message: 'Password reset token sent to your email'
     });
 
   } catch (error) {

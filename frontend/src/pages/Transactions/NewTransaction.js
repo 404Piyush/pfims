@@ -28,7 +28,11 @@ const NewTransaction = () => {
         toast.success('Transaction created successfully!');
         navigate('/transactions');
       } else {
-        toast.error(result.payload || 'Failed to create transaction');
+        // Ensure we display a string message, not an object
+        const errorMessage = typeof result.payload === 'string' 
+          ? result.payload 
+          : result.payload?.message || 'Failed to create transaction';
+        toast.error(errorMessage);
       }
     } catch (error) {
       console.error('Error creating transaction:', error);

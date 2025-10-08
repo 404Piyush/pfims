@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { fetchTransactions } from '../../store/slices/transactionSlice';
 import {
   PlusIcon,
   ArrowTrendingUpIcon,
@@ -94,19 +95,37 @@ const mockDashboardData = {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const { transactions } = useSelector((state) => state.transactions);
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(mockDashboardData);
   const [selectedPeriod, setSelectedPeriod] = useState('month');
 
   useEffect(() => {
-    // Simulate API call
+    // Fetch real transaction data
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        // Replace with actual API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setDashboardData(mockDashboardData);
+        // Fetch recent transactions (limit to 5 for dashboard)
+        await dispatch(fetchTransactions({ 
+          limit: 5, 
+          sortBy: 'date', 
+          sortOrder: 'desc' 
+        }));
+        
+        // Update dashboard data with real transactions
+        setDashboardData(prev => ({
+          ...prev,
+          recentTransactions: transactions.slice(0, 5).map(transaction => ({
+            id: transaction._id,
+            description: transaction.title || transaction.description,
+            amount: transaction.type === 'expense' ? -transaction.amount : transaction.amount,
+            category: transaction.category?.name || transaction.category || 'Uncategorized',
+            date: transaction.date,
+            type: transaction.type
+          }))
+        }));
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -115,7 +134,24 @@ const Dashboard = () => {
     };
 
     fetchDashboardData();
-  }, [selectedPeriod]);
+  }, [selectedPeriod, dispatch]);
+
+  // Update dashboard data when transactions change
+  useEffect(() => {
+    if (transactions && transactions.length > 0) {
+      setDashboardData(prev => ({
+        ...prev,
+        recentTransactions: transactions.slice(0, 5).map(transaction => ({
+          id: transaction._id,
+          description: transaction.title || transaction.description,
+          amount: transaction.type === 'expense' ? -transaction.amount : transaction.amount,
+          category: transaction.category?.name || transaction.category || 'Uncategorized',
+          date: transaction.date,
+          type: transaction.type
+        }))
+      }));
+    }
+  }, [transactions]);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {

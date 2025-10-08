@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { auth, sensitiveOperationLimit } = require('../middleware/auth');
@@ -179,15 +180,16 @@ router.post('/resend-verification', auth, sensitiveOperationLimit(15 * 60 * 1000
     
     // Generate new verification token if needed
     if (!user.emailVerificationToken) {
-      user.emailVerificationToken = require('crypto').randomBytes(32).toString('hex');
+      // Generate verification token
+      user.emailVerificationToken = crypto.randomBytes(32).toString('hex');
       await user.save();
     }
-
-    // In a real application, send email here
-    console.log(`Email verification token for ${user.email}: ${user.emailVerificationToken}`);
-
+    
+    // TODO: Send verification email
+    // console.log(`Email verification token for ${user.email}: ${user.emailVerificationToken}`);
+    
     res.json({
-      message: 'Verification email sent successfully'
+      message: 'Verification email sent'
     });
 
   } catch (error) {

@@ -215,9 +215,9 @@ const Categories = () => {
                       <ChartBarIcon className="h-4 w-4" />
                       <span>{category.transactionCount || 0} transactions</span>
                     </div>
-                    {category.budget && (
+                    {category.budget && category.budget.monthly > 0 && (
                       <div className="text-primary-600 font-medium">
-                        Budget: ₹{category.budget.toLocaleString()}
+                        Budget: ₹{category.budget.monthly.toLocaleString()}
                       </div>
                     )}
                   </div>
