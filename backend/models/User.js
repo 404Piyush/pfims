@@ -49,11 +49,34 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: 'UTC'
   },
+  notifications: {
+    email: {
+      type: Boolean,
+      default: true
+    },
+    transactionAlerts: {
+      type: Boolean,
+      default: false
+    },
+    budgetAlerts: {
+      type: Boolean,
+      default: true
+    },
+    weeklyReports: {
+      type: Boolean,
+      default: false
+    },
+    monthlyReports: {
+      type: Boolean,
+      default: false
+    }
+  },
   isEmailVerified: {
     type: Boolean,
     default: false
   },
   emailVerificationToken: String,
+  emailVerificationExpires: Date,
   passwordResetToken: String,
   passwordResetExpires: Date,
   lastLogin: Date,
@@ -71,7 +94,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // Index for better query performance
-userSchema.index({ email: 1 });
+// Note: email field already has unique: true, so no need for separate index
 userSchema.index({ isActive: 1 });
 
 // Hash password before saving

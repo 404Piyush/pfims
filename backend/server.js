@@ -1,14 +1,31 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
+const mongoSanitize = require('express-mongo-sanitize');
+const { connectDB, checkConnection } = require('./config/database');
 require('dotenv').config();
 
 const app = express();
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+}));
+
+// Compression middleware
+app.use(compression());
+
+// Data sanitization against NoSQL query injection
+app.use(mongoSanitize());
 
 // Rate limiting
 const limiter = rateLimit({
@@ -35,13 +52,8 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pfims', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('MongoDB connected successfully'))
-.catch(err => console.error('MongoDB connection error:', err));
+// Initialize database connection
+connectDB();
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -51,12 +63,24 @@ app.use('/api/budgets', require('./routes/budgets'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/reports', require('./routes/reports'));
 
-// Health check endpoint
+// Health check endpoint with database status
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  const dbStatus = checkConnection();
+  
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV 
+    uptime: process.uptime(),
+    database: {
+      connected: dbStatus.isConnected,
+      readyState: dbStatus.readyState,
+      host: dbStatus.host,
+      port: dbStatus.port,
+      name: dbStatus.name,
+      connectionAttempts: dbStatus.connectionAttempts
+    },
+    memory: process.memoryUsage(),
+    version: process.version
   });
 });
 

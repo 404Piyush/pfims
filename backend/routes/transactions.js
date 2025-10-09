@@ -3,7 +3,12 @@ const { body, query, validationResult } = require('express-validator');
 const Transaction = require('../models/Transaction');
 const Category = require('../models/Category');
 const Budget = require('../models/Budget');
+const User = require('../models/User');
 const { auth, checkOwnership } = require('../middleware/auth');
+const { handleValidationErrors, apiRateLimit, expensiveOperationSlowDown } = require('../middleware/validation');
+const QueryOptimizer = require('../utils/queryOptimizer');
+const BudgetAlertService = require('../utils/budgetAlertService');
+const emailService = require('../utils/emailService');
 
 const router = express.Router();
 
@@ -47,19 +52,11 @@ router.get('/', [
     .optional()
     .isLength({ min: 1, max: 100 })
     .withMessage('Search term must be between 1 and 100 characters')
-], auth, async (req, res) => {
+], auth, apiRateLimit, handleValidationErrors, async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
     const {
       page = 1,
-      limit = 20,
+      limit = 10,
       type,
       category,
       startDate,
@@ -71,85 +68,92 @@ router.get('/', [
       sortOrder = 'desc'
     } = req.query;
 
-    // Build filter
-    const filter = { user: req.user._id };
+    // Build optimized query
+    const filters = {
+      type,
+      category: QueryOptimizer.validateObjectId(category),
+      startDate,
+      endDate,
+      minAmount,
+      maxAmount,
+      search
+    };
 
-    if (type) filter.type = type;
-    if (category) filter.category = category;
-    if (startDate || endDate) {
-      filter.date = {};
-      if (startDate) filter.date.$gte = new Date(startDate);
-      if (endDate) filter.date.$lte = new Date(endDate);
-    }
-    if (minAmount || maxAmount) {
-      filter.amount = {};
-      if (minAmount) filter.amount.$gte = parseFloat(minAmount);
-      if (maxAmount) filter.amount.$lte = parseFloat(maxAmount);
-    }
-    if (search) {
-      // Escape special regex characters to prevent ReDoS attacks
-      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      filter.$or = [
-        { title: { $regex: escapedSearch, $options: 'i' } },
-        { description: { $regex: escapedSearch, $options: 'i' } },
-        { notes: { $regex: escapedSearch, $options: 'i' } }
-      ];
-    }
+    // Remove undefined values
+    Object.keys(filters).forEach(key => {
+      if (filters[key] === undefined || filters[key] === null) {
+        delete filters[key];
+      }
+    });
 
-    // Build sort
-    const sort = {};
-    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    const query = QueryOptimizer.buildTransactionQuery(req.user._id, filters);
+    const sortOptions = QueryOptimizer.buildSortOptions(sortBy, sortOrder);
 
-    // Execute query with pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
+    // Execute optimized queries in parallel
     const [transactions, total] = await Promise.all([
-      Transaction.find(filter)
-        .populate('category', 'name color icon type')
-        .sort(sort)
-        .skip(skip)
-        .limit(parseInt(limit)),
-      Transaction.countDocuments(filter)
+      QueryOptimizer.optimizeQuery(
+        Transaction.find(query)
+          .populate('category', 'name color icon type')
+          .sort(sortOptions)
+          .skip(skip)
+          .limit(parseInt(limit)),
+        { lean: true }
+      ),
+      Transaction.countDocuments(query)
     ]);
 
     // Calculate summary statistics
-    const summary = await Transaction.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: '$type',
-          total: { $sum: '$amount' },
-          count: { $sum: 1 }
+    const summaryPipeline = QueryOptimizer.buildTransactionAnalyticsPipeline(req.user._id, filters);
+    summaryPipeline.push({
+      $group: {
+        _id: null,
+        totalIncome: {
+          $sum: {
+            $cond: [{ $eq: ['$type', 'income'] }, '$amount', 0]
+          }
+        },
+        totalExpense: {
+          $sum: {
+            $cond: [{ $eq: ['$type', 'expense'] }, '$amount', 0]
+          }
+        },
+        count: { $sum: 1 }
+      }
+    });
+
+    const [summary] = await Transaction.aggregate(summaryPipeline);
+
+    const response = {
+      success: true,
+      message: 'Transactions retrieved successfully',
+      data: {
+        transactions,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / parseInt(limit)),
+          totalItems: total,
+          itemsPerPage: parseInt(limit),
+          hasNextPage: parseInt(page) < Math.ceil(total / parseInt(limit)),
+          hasPrevPage: parseInt(page) > 1
+        },
+        summary: summary || {
+          totalIncome: 0,
+          totalExpense: 0,
+          count: 0
         }
       }
-    ]);
+    };
 
-    const summaryStats = summary.reduce((acc, stat) => {
-      acc[stat._id] = {
-        total: stat.total,
-        count: stat.count
-      };
-      return acc;
-    }, {});
-
-    res.json({
-      message: 'Transactions retrieved successfully',
-      transactions,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / parseInt(limit)),
-        totalItems: total,
-        itemsPerPage: parseInt(limit),
-        hasNext: skip + parseInt(limit) < total,
-        hasPrev: parseInt(page) > 1
-      },
-      summary: summaryStats
-    });
+    res.json(response);
 
   } catch (error) {
     console.error('Get transactions error:', error);
     res.status(500).json({
-      message: 'Server error retrieving transactions'
+      success: false,
+      message: 'Server error retrieving transactions',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -205,25 +209,18 @@ router.post('/', [
     .trim()
     .isLength({ max: 500 })
     .withMessage('Description cannot exceed 500 characters')
-], auth, async (req, res) => {
+], auth, handleValidationErrors, async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    // Verify category belongs to user
+    // Verify category belongs to user and is active
     const category = await Category.findOne({
       _id: req.body.category,
       user: req.user._id,
       isActive: true
-    });
+    }).lean();
 
     if (!category) {
       return res.status(400).json({
+        success: false,
         message: 'Invalid category or category does not belong to user'
       });
     }
@@ -231,44 +228,83 @@ router.post('/', [
     // Verify category type matches transaction type
     if (category.type !== 'both' && category.type !== req.body.type) {
       return res.status(400).json({
+        success: false,
         message: `Category is for ${category.type} transactions only`
       });
     }
 
-    const transaction = new Transaction({
+    // Create transaction with optimized data
+    const transactionData = {
       ...req.body,
       user: req.user._id,
-      currency: req.user.currency
-    });
+      currency: req.user.currency || 'USD',
+      date: req.body.date ? new Date(req.body.date) : new Date()
+    };
 
+    const transaction = new Transaction(transactionData);
     await transaction.save();
 
-    // Update budget spent amounts if this is an expense
+    // Update budget spent amounts if this is an expense (optimized)
     if (transaction.type === 'expense') {
       const activeBudgets = await Budget.find({
         user: req.user._id,
         isActive: true,
         startDate: { $lte: transaction.date },
-        endDate: { $gte: transaction.date }
-      });
+        endDate: { $gte: transaction.date },
+        'categories.category': transaction.category
+      }).populate('categories.category');
 
+      // Update budgets and check for alerts
       for (const budget of activeBudgets) {
+        // Update spent amounts
         await budget.updateSpentAmounts();
+        
+        // Check and send budget alerts
+        await BudgetAlertService.checkAndSendAlerts(budget, transaction);
       }
+    }
+
+    // Send transaction notification email if enabled
+    try {
+      const user = await User.findById(req.user._id);
+      if (user && user.notifications && user.notifications.email && user.notifications.transactionAlerts) {
+        await emailService.sendTransactionNotificationEmail(user, transaction, category);
+      }
+    } catch (emailError) {
+      console.warn('Failed to send transaction notification email:', emailError.message);
+      // Don't fail the transaction creation if email fails
     }
 
     // Populate category for response
     await transaction.populate('category', 'name color icon type');
 
     res.status(201).json({
+      success: true,
       message: 'Transaction created successfully',
-      transaction
+      data: {
+        transaction
+      }
     });
 
   } catch (error) {
     console.error('Create transaction error:', error);
+    
+    // Handle specific MongoDB errors
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: Object.values(error.errors).map(err => ({
+          field: err.path,
+          message: err.message
+        }))
+      });
+    }
+
     res.status(500).json({
-      message: 'Server error creating transaction'
+      success: false,
+      message: 'Server error creating transaction',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -354,10 +390,15 @@ router.put('/:id', [
       const activeBudgets = await Budget.find({
         user: req.user._id,
         isActive: true
-      });
+      }).populate('categories.category');
 
       for (const budget of activeBudgets) {
         await budget.updateSpentAmounts();
+        
+        // Check for budget alerts if this is an expense transaction
+        if (transaction.type === 'expense') {
+          await BudgetAlertService.checkAndSendAlerts(budget, transaction);
+        }
       }
     }
 
@@ -419,56 +460,52 @@ router.get('/analytics/summary', [
     .optional()
     .isISO8601()
     .withMessage('Invalid end date')
-], auth, async (req, res) => {
+], auth, expensiveOperationSlowDown, handleValidationErrors, async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
     const { period = 'month', startDate, endDate } = req.query;
 
-    // Calculate date range
-    let dateRange = {};
-    const now = new Date();
-
+    let dateRange;
     if (period === 'custom' && startDate && endDate) {
-      dateRange = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      };
+      dateRange = QueryOptimizer.buildDateRange(startDate, endDate);
     } else {
+      // Build date range based on period
+      const now = new Date();
       switch (period) {
         case 'week':
-          const weekStart = new Date(now);
-          weekStart.setDate(now.getDate() - 7);
-          dateRange = { $gte: weekStart };
+          const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+          const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+          dateRange = { $gte: weekStart, $lte: weekEnd };
           break;
         case 'month':
           const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-          dateRange = { $gte: monthStart };
+          const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+          dateRange = { $gte: monthStart, $lte: monthEnd };
           break;
         case 'quarter':
-          const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-          dateRange = { $gte: quarterStart };
+          const quarter = Math.floor(now.getMonth() / 3);
+          const quarterStart = new Date(now.getFullYear(), quarter * 3, 1);
+          const quarterEnd = new Date(now.getFullYear(), quarter * 3 + 3, 0, 23, 59, 59);
+          dateRange = { $gte: quarterStart, $lte: quarterEnd };
           break;
         case 'year':
           const yearStart = new Date(now.getFullYear(), 0, 1);
-          dateRange = { $gte: yearStart };
+          const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+          dateRange = { $gte: yearStart, $lte: yearEnd };
           break;
+        default:
+          const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+          const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+          dateRange = { $gte: defaultStart, $lte: defaultEnd };
       }
     }
 
-    // Aggregate transaction data
+    // Build comprehensive analytics pipeline
     const pipeline = [
       {
         $match: {
           user: req.user._id,
-          date: dateRange,
-          status: 'completed'
+          status: 'completed',
+          date: dateRange
         }
       },
       {
@@ -490,73 +527,114 @@ router.get('/analytics/summary', [
             categoryName: '$categoryInfo.name',
             categoryColor: '$categoryInfo.color'
           },
-          total: { $sum: '$amount' },
-          count: { $sum: 1 },
-          avgAmount: { $avg: '$amount' }
+          totalAmount: { $sum: '$amount' },
+          transactionCount: { $sum: 1 },
+          avgAmount: { $avg: '$amount' },
+          maxAmount: { $max: '$amount' },
+          minAmount: { $min: '$amount' }
         }
       },
       {
         $group: {
           _id: '$_id.type',
-          total: { $sum: '$total' },
-          count: { $sum: '$count' },
           categories: {
             $push: {
-              id: '$_id.category',
+              category: '$_id.category',
               name: '$_id.categoryName',
               color: '$_id.categoryColor',
-              total: '$total',
-              count: '$count',
-              avgAmount: '$avgAmount'
+              totalAmount: '$totalAmount',
+              transactionCount: '$transactionCount',
+              avgAmount: '$avgAmount',
+              maxAmount: '$maxAmount',
+              minAmount: '$minAmount',
+              percentage: '$totalAmount'
             }
-          }
+          },
+          totalByType: { $sum: '$totalAmount' },
+          transactionCountByType: { $sum: '$transactionCount' }
         }
       }
     ];
 
-    const results = await Transaction.aggregate(pipeline);
+    // Execute analytics query
+    const analyticsResult = await Transaction.aggregate(pipeline);
 
-    // Format response
+    // Calculate percentages and format data
     const summary = {
-      period,
-      dateRange: {
-        start: dateRange.$gte || null,
-        end: dateRange.$lte || null
-      },
-      totals: {
-        income: 0,
-        expense: 0,
-        net: 0
-      },
+      totalIncome: 0,
+      totalExpense: 0,
+      netIncome: 0,
+      transactionCount: 0,
       categories: {
         income: [],
         expense: []
       },
-      transactionCounts: {
-        income: 0,
-        expense: 0,
-        total: 0
+      trends: {
+        period,
+        dateRange: {
+          start: dateRange.$gte,
+          end: dateRange.$lte
+        }
       }
     };
 
-    results.forEach(result => {
-      summary.totals[result._id] = result.total;
-      summary.categories[result._id] = result.categories.sort((a, b) => b.total - a.total);
-      summary.transactionCounts[result._id] = result.count;
+    analyticsResult.forEach(typeGroup => {
+      const type = typeGroup._id;
+      summary[`total${type.charAt(0).toUpperCase() + type.slice(1)}`] = typeGroup.totalByType;
+      summary.transactionCount += typeGroup.transactionCountByType;
+
+      // Calculate percentages for categories
+      typeGroup.categories.forEach(cat => {
+        cat.percentage = ((cat.totalAmount / typeGroup.totalByType) * 100).toFixed(2);
+      });
+
+      // Sort categories by amount (descending)
+      typeGroup.categories.sort((a, b) => b.totalAmount - a.totalAmount);
+      summary.categories[type] = typeGroup.categories;
     });
 
-    summary.totals.net = summary.totals.income - summary.totals.expense;
-    summary.transactionCounts.total = summary.transactionCounts.income + summary.transactionCounts.expense;
+    summary.netIncome = summary.totalIncome - summary.totalExpense;
+
+    // Get monthly trend data for the period
+    const trendPipeline = [
+      {
+        $match: {
+          user: req.user._id,
+          status: 'completed',
+          date: dateRange
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$date' },
+            month: { $month: '$date' },
+            type: '$type'
+          },
+          amount: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { '_id.year': 1, '_id.month': 1 }
+      }
+    ];
+
+    const trendData = await Transaction.aggregate(trendPipeline);
+    summary.trends.monthlyData = trendData;
 
     res.json({
-      message: 'Analytics summary retrieved successfully',
-      summary
+      success: true,
+      message: 'Transaction summary retrieved successfully',
+      data: summary
     });
 
   } catch (error) {
-    console.error('Get analytics summary error:', error);
+    console.error('Transaction summary error:', error);
     res.status(500).json({
-      message: 'Server error retrieving analytics'
+      success: false,
+      message: 'Server error retrieving transaction summary',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

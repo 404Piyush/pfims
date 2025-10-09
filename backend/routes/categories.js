@@ -1,57 +1,176 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
+const { body, query, validationResult } = require('express-validator');
 const Category = require('../models/Category');
 const Transaction = require('../models/Transaction');
 const { auth, checkOwnership } = require('../middleware/auth');
+const { handleValidationErrors, apiRateLimit, expensiveOperationSlowDown } = require('../middleware/validation');
+const QueryOptimizer = require('../utils/queryOptimizer');
 
 const router = express.Router();
 
 // @route   GET /api/categories
-// @desc    Get user categories
+// @desc    Get user categories with filtering and optimization
 // @access  Private
-router.get('/', auth, async (req, res) => {
+router.get('/', [
+  query('type')
+    .optional()
+    .isIn(['income', 'expense', 'both', 'all'])
+    .withMessage('Type must be income, expense, both, or all'),
+  query('includeInactive')
+    .optional()
+    .isBoolean()
+    .withMessage('includeInactive must be a boolean'),
+  query('parent')
+    .optional()
+    .custom(value => value === 'null' || require('mongoose').Types.ObjectId.isValid(value))
+    .withMessage('Parent must be a valid ObjectId or null'),
+  query('search')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 100 })
+    .withMessage('Search term must be between 1 and 100 characters'),
+  query('includeStats')
+    .optional()
+    .isBoolean()
+    .withMessage('includeStats must be a boolean'),
+  query('sortBy')
+    .optional()
+    .isIn(['name', 'type', 'order', 'createdAt', 'transactionCount'])
+    .withMessage('Invalid sort field'),
+  query('sortOrder')
+    .optional()
+    .isIn(['asc', 'desc'])
+    .withMessage('Sort order must be asc or desc')
+], auth, apiRateLimit, handleValidationErrors, async (req, res) => {
   try {
-    const { type, includeInactive = false } = req.query;
+    const { 
+      type = 'all', 
+      includeInactive = false, 
+      parent,
+      search,
+      includeStats = true,
+      sortBy = 'order',
+      sortOrder = 'asc'
+    } = req.query;
 
-    const filter = { user: req.user._id };
-    if (!includeInactive) filter.isActive = true;
-    if (type && type !== 'both') {
-      filter.$or = [{ type: type }, { type: 'both' }];
-    }
+    // Build optimized query filter
+    const filter = QueryOptimizer.buildCategoryQuery(req.user._id, {
+      type,
+      includeInactive: includeInactive === 'true',
+      parent,
+      search
+    });
 
+    // Build sort options
+    const sortOptions = QueryOptimizer.buildSortOptions(sortBy, sortOrder);
+
+    // Execute main query
     const categories = await Category.find(filter)
-      .populate('parent', 'name color icon')
-      .sort({ order: 1, name: 1 });
+      .populate('parent', 'name color icon type')
+      .sort(sortOptions)
+      .lean();
 
-    // Add transaction counts to each category
-    const categoriesWithCounts = await Promise.all(
-      categories.map(async (category) => {
-        const transactionCount = await Transaction.countDocuments({
-          category: category._id,
-          user: req.user._id,
-          status: 'completed'
-        });
+    let categoriesWithData = categories;
+
+    // Add transaction statistics if requested
+    if (includeStats === 'true') {
+      // Use aggregation for better performance when getting transaction counts
+      const transactionCounts = await Transaction.aggregate([
+        {
+          $match: {
+            category: { $in: categories.map(cat => cat._id) },
+            user: req.user._id,
+            status: 'completed'
+          }
+        },
+        {
+          $group: {
+            _id: '$category',
+            totalTransactions: { $sum: 1 },
+            totalAmount: { $sum: '$amount' },
+            lastTransactionDate: { $max: '$date' }
+          }
+        }
+      ]);
+
+      // Create a map for quick lookup
+      const statsMap = new Map(
+        transactionCounts.map(stat => [stat._id.toString(), stat])
+      );
+
+      // Add stats to categories
+      categoriesWithData = categories.map(category => {
+        const stats = statsMap.get(category._id.toString()) || {
+          totalTransactions: 0,
+          totalAmount: 0,
+          lastTransactionDate: null
+        };
 
         return {
-          ...category.toObject(),
-          transactionCount
+          ...category,
+          transactionCount: stats.totalTransactions,
+          totalAmount: stats.totalAmount,
+          lastTransactionDate: stats.lastTransactionDate,
+          hasTransactions: stats.totalTransactions > 0
         };
-      })
-    );
+      });
+    }
 
-    // Build tree structure
-    const categoryTree = await Category.getCategoryTree(req.user._id, type);
+    // Build category tree structure for hierarchical display
+    const categoryTree = await Category.aggregate([
+      {
+        $match: filter
+      },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: '_id',
+          foreignField: 'parent',
+          as: 'children'
+        }
+      },
+      {
+        $match: {
+          parent: null // Only root categories for tree structure
+        }
+      },
+      {
+        $sort: sortOptions
+      }
+    ]);
+
+    // Calculate summary statistics
+    const summary = {
+      totalCategories: categories.length,
+      activeCategories: categories.filter(cat => cat.isActive).length,
+      inactiveCategories: categories.filter(cat => !cat.isActive).length,
+      incomeCategories: categories.filter(cat => cat.type === 'income' || cat.type === 'both').length,
+      expenseCategories: categories.filter(cat => cat.type === 'expense' || cat.type === 'both').length,
+      parentCategories: categories.filter(cat => !cat.parent).length,
+      subcategories: categories.filter(cat => cat.parent).length
+    };
+
+    if (includeStats === 'true') {
+      summary.categoriesWithTransactions = categoriesWithData.filter(cat => cat.hasTransactions).length;
+      summary.totalTransactionAmount = categoriesWithData.reduce((sum, cat) => sum + (cat.totalAmount || 0), 0);
+    }
 
     res.json({
+      success: true,
       message: 'Categories retrieved successfully',
-      categories: categoriesWithCounts,
-      categoryTree
+      data: {
+        categories: categoriesWithData,
+        categoryTree: categoryTree,
+        summary
+      }
     });
 
   } catch (error) {
     console.error('Get categories error:', error);
     res.status(500).json({
-      message: 'Server error retrieving categories'
+      success: false,
+      message: 'Server error retrieving categories',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

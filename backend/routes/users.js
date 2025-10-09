@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { auth, sensitiveOperationLimit } = require('../middleware/auth');
+const emailService = require('../utils/emailService');
 
 const router = express.Router();
 
@@ -140,14 +141,31 @@ router.put('/email', [
     }
 
     // Update email and reset verification status
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+    
     user.email = email;
     user.isEmailVerified = false;
-    user.emailVerificationToken = require('crypto').randomBytes(32).toString('hex');
+    user.emailVerificationToken = hashedToken;
+    user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
     await user.save();
 
+    // Send verification email to new address
+    try {
+      const emailResult = await emailService.sendVerificationEmail(user, verificationToken);
+      
+      if (!emailResult.success) {
+        console.error('Failed to send verification email:', emailResult.error);
+        // Continue with success response as email was updated
+      }
+    } catch (emailError) {
+      console.error('Email service error:', emailError);
+      // Continue with success response as email was updated
+    }
+
     res.json({
-      message: 'Email updated successfully. Please verify your new email address.',
+      message: 'Email updated successfully. Please check your new email address for verification.',
       user: {
         id: user._id,
         firstName: user.firstName,
@@ -178,18 +196,33 @@ router.post('/resend-verification', auth, sensitiveOperationLimit(15 * 60 * 1000
 
     const user = await User.findById(req.user._id);
     
-    // Generate new verification token if needed
-    if (!user.emailVerificationToken) {
-      // Generate verification token
-      user.emailVerificationToken = crypto.randomBytes(32).toString('hex');
-      await user.save();
+    // Generate new verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+    
+    user.emailVerificationToken = hashedToken;
+    user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    await user.save();
+    
+    // Send verification email
+    try {
+      const emailResult = await emailService.sendVerificationEmail(user, verificationToken);
+      
+      if (!emailResult.success) {
+        console.error('Failed to send verification email:', emailResult.error);
+        return res.status(500).json({
+          message: 'Failed to send verification email. Please try again later.'
+        });
+      }
+    } catch (emailError) {
+      console.error('Email service error:', emailError);
+      return res.status(500).json({
+        message: 'Failed to send verification email. Please try again later.'
+      });
     }
     
-    // TODO: Send verification email
-    // console.log(`Email verification token for ${user.email}: ${user.emailVerificationToken}`);
-    
     res.json({
-      message: 'Verification email sent'
+      message: 'Verification email sent successfully'
     });
 
   } catch (error) {

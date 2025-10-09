@@ -1,74 +1,138 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
+const { body, query, validationResult } = require('express-validator');
 const Budget = require('../models/Budget');
 const Category = require('../models/Category');
 const Transaction = require('../models/Transaction');
 const { auth, checkOwnership } = require('../middleware/auth');
+const { handleValidationErrors, apiRateLimit, expensiveOperationSlowDown } = require('../middleware/validation');
+const QueryOptimizer = require('../utils/queryOptimizer');
 
 const router = express.Router();
 
 // @route   GET /api/budgets
-// @desc    Get user budgets
+// @desc    Get all budgets for user with filtering and pagination
 // @access  Private
-router.get('/', auth, async (req, res) => {
+router.get('/', [
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer'),
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Limit must be between 1 and 100'),
+  query('status')
+    .optional()
+    .isIn(['active', 'inactive', 'expired', 'all'])
+    .withMessage('Status must be active, inactive, expired, or all'),
+  query('period')
+    .optional()
+    .isIn(['weekly', 'monthly', 'quarterly', 'yearly', 'custom'])
+    .withMessage('Period must be weekly, monthly, quarterly, yearly, or custom'),
+  query('sortBy')
+    .optional()
+    .isIn(['name', 'totalBudget', 'totalSpent', 'startDate', 'endDate', 'utilizationPercentage'])
+    .withMessage('Invalid sort field'),
+  query('sortOrder')
+    .optional()
+    .isIn(['asc', 'desc'])
+    .withMessage('Sort order must be asc or desc')
+], auth, apiRateLimit, handleValidationErrors, async (req, res) => {
   try {
     const { 
-      active = true, 
-      period, 
       page = 1, 
-      limit = 10,
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
+      limit = 10, 
+      status = 'all', 
+      period, 
+      sortBy = 'startDate', 
+      sortOrder = 'desc',
+      search 
     } = req.query;
 
-    const filter = { user: req.user._id };
-    if (active !== 'all') {
-      filter.isActive = active === 'true';
-    }
-    if (period) {
-      filter.period = period;
-    }
+    // Build query filter
+    const filter = QueryOptimizer.buildBudgetQuery(req.user._id, { status, period, search });
+    
+    // Build sort options
+    const sortOptions = QueryOptimizer.buildSortOptions(sortBy, sortOrder);
 
-    const sortOptions = {};
-    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
+    // Execute queries in parallel for better performance
     const [budgets, total] = await Promise.all([
       Budget.find(filter)
         .populate('categories.category', 'name color icon type')
         .sort(sortOptions)
-        .skip(skip)
-        .limit(parseInt(limit)),
+        .limit(parseInt(limit))
+        .skip((parseInt(page) - 1) * parseInt(limit))
+        .lean(),
       Budget.countDocuments(filter)
     ]);
 
-    // Calculate current status for each budget
-    const budgetsWithStatus = budgets.map(budget => {
-      const budgetObj = budget.toObject();
+    // Calculate enhanced budget metrics
+    const budgetsWithMetrics = budgets.map(budget => {
+      const now = new Date();
+      const totalBudget = budget.categories.reduce((sum, cat) => sum + cat.budget, 0);
+      const utilizationPercentage = totalBudget > 0 ? (budget.totalSpent / totalBudget) * 100 : 0;
+      const remainingBudget = totalBudget - budget.totalSpent;
+      
+      // Calculate days remaining
+      const daysRemaining = Math.max(0, Math.ceil((budget.endDate - now) / (1000 * 60 * 60 * 24)));
+      
+      // Determine budget status
+      let budgetStatus = 'active';
+      if (now > budget.endDate) {
+        budgetStatus = 'expired';
+      } else if (!budget.isActive) {
+        budgetStatus = 'inactive';
+      } else if (utilizationPercentage > 100) {
+        budgetStatus = 'over_budget';
+      } else if (utilizationPercentage > 80) {
+        budgetStatus = 'near_limit';
+      }
+
       return {
-        ...budgetObj,
-        utilizationPercentage: budget.utilizationPercentage,
-        remainingBudget: budget.remainingBudget,
-        daysRemaining: budget.daysRemaining,
-        status: budget.budgetStatus
+        ...budget,
+        totalBudget,
+        utilizationPercentage: Math.round(utilizationPercentage * 100) / 100,
+        remainingBudget,
+        daysRemaining,
+        budgetStatus,
+        isOverBudget: utilizationPercentage > 100,
+        isNearLimit: utilizationPercentage > 80 && utilizationPercentage <= 100
       };
     });
 
+    // Calculate summary statistics
+    const summary = {
+      totalBudgets: total,
+      activeBudgets: budgetsWithMetrics.filter(b => b.budgetStatus === 'active').length,
+      overBudgetCount: budgetsWithMetrics.filter(b => b.isOverBudget).length,
+      nearLimitCount: budgetsWithMetrics.filter(b => b.isNearLimit).length,
+      totalBudgetAmount: budgetsWithMetrics.reduce((sum, b) => sum + b.totalBudget, 0),
+      totalSpentAmount: budgetsWithMetrics.reduce((sum, b) => sum + b.totalSpent, 0)
+    };
+
     res.json({
+      success: true,
       message: 'Budgets retrieved successfully',
-      budgets: budgetsWithStatus,
-      pagination: {
-        current: parseInt(page),
-        pages: Math.ceil(total / parseInt(limit)),
-        total
+      data: {
+        budgets: budgetsWithMetrics,
+        summary,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / parseInt(limit)),
+          totalItems: total,
+          itemsPerPage: parseInt(limit),
+          hasNextPage: parseInt(page) < Math.ceil(total / parseInt(limit)),
+          hasPrevPage: parseInt(page) > 1
+        }
       }
     });
 
   } catch (error) {
     console.error('Get budgets error:', error);
     res.status(500).json({
-      message: 'Server error retrieving budgets'
+      success: false,
+      message: 'Server error retrieving budgets',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
