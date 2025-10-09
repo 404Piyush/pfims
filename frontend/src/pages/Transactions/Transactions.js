@@ -179,7 +179,7 @@ const Transactions = () => {
       const headers = ['Date', 'Description', 'Category', 'Type', 'Amount', 'Status'];
       const csvContent = [
         headers.join(','),
-        ...transactions.map(transaction => [
+        ...(transactions || []).map(transaction => [
           formatDate(transaction.date),
           `"${transaction.description || transaction.title || ''}"`,
           `"${transaction.category?.name || transaction.category || 'Uncategorized'}"`,
@@ -341,7 +341,7 @@ const Transactions = () => {
                 className="input"
               >
                 <option value="all">All Categories</option>
-                {categories.map((category) => (
+                {(categories || []).map((category) => (
                   <option key={category._id} value={category._id}>
                     {category.name}
                   </option>
@@ -467,7 +467,7 @@ const Transactions = () => {
               </tr>
             </thead>
             <tbody>
-              {transactions.map((transaction) => (
+              {(transactions || []).map((transaction) => (
                 <tr key={transaction._id} className="table-row">
                   <td className="table-cell">
                     {formatDate(transaction.date)}

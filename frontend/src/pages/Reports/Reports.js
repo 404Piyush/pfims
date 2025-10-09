@@ -62,13 +62,13 @@ const Reports = () => {
   };
 
   // Filter transactions based on current filters
-  const filteredTransactions = transactions.filter(transaction => {
+  const filteredTransactions = Array.isArray(transactions) ? transactions.filter(transaction => {
     const { startDate, endDate } = getDateRange();
     const transactionDate = parseISO(transaction.date);
     const inDateRange = transactionDate >= startDate && transactionDate <= endDate;
     const inCategory = categoryFilter === 'all' || transaction.category?._id === categoryFilter;
     return inDateRange && inCategory;
-  });
+  }) : [];
 
   // Calculate financial metrics
   const calculateMetrics = () => {
@@ -142,7 +142,7 @@ const Reports = () => {
 
   // Get budget performance
   const getBudgetPerformance = () => {
-    return budgets.map(budget => {
+    return Array.isArray(budgets) ? budgets.map(budget => {
       const { startDate, endDate } = getDateRange();
       const budgetTransactions = filteredTransactions.filter(transaction => {
         const transactionDate = parseISO(transaction.date);
@@ -164,7 +164,7 @@ const Reports = () => {
         remaining: budget.amount - spent,
         status: percentage >= 100 ? 'exceeded' : percentage >= 80 ? 'warning' : 'on-track'
       };
-    });
+    }) : [];
   };
 
   const formatCurrency = (amount) => {
@@ -269,7 +269,7 @@ const Reports = () => {
                 className="input"
               >
                 <option value="all">All Categories</option>
-                {categories.map(category => (
+                {Array.isArray(categories) && categories.map(category => (
                   <option key={category._id} value={category._id}>
                     {category.name}
                   </option>

@@ -111,7 +111,16 @@ const categorySlice = createSlice({
       })
       .addCase(fetchCategories.fulfilled, (state, action) => {
         state.loading = false;
-        state.categories = action.payload.categories || action.payload;
+        // Handle nested API response structure
+        if (action.payload.data && action.payload.data.categories) {
+          state.categories = action.payload.data.categories;
+        } else if (action.payload.categories) {
+          state.categories = action.payload.categories;
+        } else if (Array.isArray(action.payload)) {
+          state.categories = action.payload;
+        } else {
+          state.categories = [];
+        }
       })
       .addCase(fetchCategories.rejected, (state, action) => {
         state.loading = false;

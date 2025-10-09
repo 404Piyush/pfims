@@ -7,6 +7,7 @@ import PublicRoute from './components/Auth/PublicRoute';
 import Layout from './components/Layout/Layout';
 import LoadingSpinner from './components/UI/LoadingSpinner';
 import Toast from './components/UI/Toast';
+import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 
 // Auth pages
 import Login from './pages/Auth/Login';
@@ -45,76 +46,78 @@ function App() {
   }
 
   return (
-    <div className="App">
-      <Routes>
-        {/* Public routes */}
-          <Route
-            path="/login"
-            element={
-              <PublicRoute>
-                <Login />
-              </PublicRoute>
-            }
-          />
-          <Route
-            path="/register"
-            element={
-              <PublicRoute>
-                <Register />
-              </PublicRoute>
-            }
-          />
-          <Route
-            path="/forgot-password"
-            element={
-              <PublicRoute>
-                <ForgotPassword />
-              </PublicRoute>
-            }
-          />
-          <Route
-            path="/reset-password"
-            element={
-              <PublicRoute>
-                <ResetPassword />
-              </PublicRoute>
-            }
-          />
-          <Route
-            path="/verify-email"
-            element={
-              <PublicRoute>
-                <VerifyEmail />
-              </PublicRoute>
-            }
-          />
+    <ErrorBoundary>
+      <div className="App">
+        <Routes>
+          {/* Public routes */}
+            <Route
+              path="/login"
+              element={
+                <PublicRoute>
+                  <Login />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <PublicRoute>
+                  <Register />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/forgot-password"
+              element={
+                <PublicRoute>
+                  <ForgotPassword />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={
+                <PublicRoute>
+                  <ResetPassword />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/verify-email"
+              element={
+                <PublicRoute>
+                  <VerifyEmail />
+                </PublicRoute>
+              }
+            />
 
-          {/* Protected routes with Layout */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="transactions" element={<Transactions />} />
-            <Route path="transactions/new" element={<NewTransaction />} />
-            <Route path="categories" element={<Categories />} />
-            <Route path="budgets" element={<Budgets />} />
-            <Route path="reports" element={<Reports />} />
-            <Route path="profile" element={<Profile />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
+            {/* Protected routes with Layout */}
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="transactions" element={<Transactions />} />
+              <Route path="transactions/new" element={<NewTransaction />} />
+              <Route path="categories" element={<Categories />} />
+              <Route path="budgets" element={<Budgets />} />
+              <Route path="reports" element={<Reports />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="settings" element={<Settings />} />
+            </Route>
 
-          {/* 404 page */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+            {/* 404 page */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
 
-        {/* Global Toast notifications */}
-        <Toast />
-      </div>
+          {/* Global Toast notifications */}
+          <Toast />
+        </div>
+    </ErrorBoundary>
   );
 }
 

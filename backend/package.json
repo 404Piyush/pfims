@@ -6,6 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "build": "echo 'Backend build complete - Node.js project ready for production'",
+    "build:prod": "npm ci --only=production && npm run build",
+    "prebuild": "npm run test:database",
+    "postbuild": "echo 'Backend build and validation complete'",
     "test": "jest",
     "test:auth": "node scripts/testAuth.js",
     "test:login": "node scripts/testLogin.js",

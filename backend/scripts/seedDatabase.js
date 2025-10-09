@@ -134,20 +134,20 @@ const seedDatabase = async () => {
     
     const transactionTemplates = [
       // Income transactions
-      { title: 'Monthly Salary', amount: 5000, type: 'income', paymentMethod: 'bank_transfer', description: 'Monthly salary payment' },
-      { title: 'Freelance Project', amount: 1200, type: 'income', paymentMethod: 'bank_transfer', description: 'Web development project' },
-      { title: 'Stock Dividends', amount: 150, type: 'income', paymentMethod: 'bank_transfer', description: 'Quarterly dividend payment' },
+      { title: 'Monthly Salary', amount: 5000, type: 'income', paymentMethod: 'bank_transfer', account: 'Checking Account', description: 'Monthly salary payment' },
+      { title: 'Freelance Project', amount: 1200, type: 'income', paymentMethod: 'bank_transfer', account: 'Checking Account', description: 'Web development project' },
+      { title: 'Stock Dividends', amount: 150, type: 'income', paymentMethod: 'bank_transfer', account: 'Investment Account', description: 'Quarterly dividend payment' },
       
       // Expense transactions
-      { title: 'Grocery Shopping', amount: 85.50, type: 'expense', paymentMethod: 'credit_card', description: 'Weekly grocery shopping' },
-      { title: 'Gas Station', amount: 45.00, type: 'expense', paymentMethod: 'debit_card', description: 'Fuel for car' },
-      { title: 'Restaurant Dinner', amount: 67.25, type: 'expense', paymentMethod: 'credit_card', description: 'Dinner with friends' },
-      { title: 'Netflix Subscription', amount: 15.99, type: 'expense', paymentMethod: 'credit_card', description: 'Monthly streaming subscription' },
-      { title: 'Electricity Bill', amount: 120.00, type: 'expense', paymentMethod: 'bank_transfer', description: 'Monthly electricity bill' },
-      { title: 'Coffee Shop', amount: 4.50, type: 'expense', paymentMethod: 'cash', description: 'Morning coffee' },
-      { title: 'Online Course', amount: 99.00, type: 'expense', paymentMethod: 'credit_card', description: 'JavaScript course on Udemy' },
-      { title: 'Movie Tickets', amount: 24.00, type: 'expense', paymentMethod: 'credit_card', description: 'Weekend movie night' },
-      { title: 'Uber Ride', amount: 12.50, type: 'expense', paymentMethod: 'credit_card', description: 'Ride to airport' }
+      { title: 'Grocery Shopping', amount: 85.50, type: 'expense', paymentMethod: 'credit_card', account: 'Credit Card', description: 'Weekly grocery shopping' },
+      { title: 'Gas Station', amount: 45.00, type: 'expense', paymentMethod: 'debit_card', account: 'Checking Account', description: 'Fuel for car' },
+      { title: 'Restaurant Dinner', amount: 67.25, type: 'expense', paymentMethod: 'credit_card', account: 'Credit Card', description: 'Dinner with friends' },
+      { title: 'Netflix Subscription', amount: 15.99, type: 'expense', paymentMethod: 'credit_card', account: 'Credit Card', description: 'Monthly streaming subscription' },
+      { title: 'Electricity Bill', amount: 120.00, type: 'expense', paymentMethod: 'bank_transfer', account: 'Checking Account', description: 'Monthly electricity bill' },
+      { title: 'Coffee Shop', amount: 4.50, type: 'expense', paymentMethod: 'cash', account: 'Cash', description: 'Morning coffee' },
+      { title: 'Online Course', amount: 99.00, type: 'expense', paymentMethod: 'credit_card', account: 'Credit Card', description: 'JavaScript course on Udemy' },
+      { title: 'Movie Tickets', amount: 24.00, type: 'expense', paymentMethod: 'credit_card', account: 'Credit Card', description: 'Weekend movie night' },
+      { title: 'Uber Ride', amount: 12.50, type: 'expense', paymentMethod: 'credit_card', account: 'Credit Card', description: 'Ride to airport' }
     ];
 
     for (const user of createdUsers) {

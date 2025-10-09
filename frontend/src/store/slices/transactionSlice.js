@@ -119,14 +119,26 @@ const transactionSlice = createSlice({
       })
       .addCase(fetchTransactions.fulfilled, (state, action) => {
         state.loading = false;
-        state.transactions = action.payload.transactions || action.payload;
-        if (action.payload.pagination) {
+        // Ensure transactions is always an array
+        if (Array.isArray(action.payload)) {
+          state.transactions = action.payload;
+        } else if (action.payload.data && action.payload.data.transactions && Array.isArray(action.payload.data.transactions)) {
+          state.transactions = action.payload.data.transactions;
+        } else if (action.payload.transactions && Array.isArray(action.payload.transactions)) {
+          state.transactions = action.payload.transactions;
+        } else {
+          state.transactions = [];
+        }
+        if (action.payload.data && action.payload.data.pagination) {
+          state.pagination = action.payload.data.pagination;
+        } else if (action.payload.pagination) {
           state.pagination = action.payload.pagination;
         }
       })
       .addCase(fetchTransactions.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        state.transactions = []; // Ensure transactions is always an array
       })
       
       // Create transaction
@@ -136,7 +148,12 @@ const transactionSlice = createSlice({
       })
       .addCase(createTransaction.fulfilled, (state, action) => {
         state.loading = false;
-        state.transactions.unshift(action.payload);
+        // Ensure transactions is an array before using unshift
+        if (Array.isArray(state.transactions)) {
+          state.transactions.unshift(action.payload);
+        } else {
+          state.transactions = [action.payload];
+        }
       })
       .addCase(createTransaction.rejected, (state, action) => {
         state.loading = false;
@@ -150,9 +167,14 @@ const transactionSlice = createSlice({
       })
       .addCase(updateTransaction.fulfilled, (state, action) => {
         state.loading = false;
-        const index = state.transactions.findIndex(t => t._id === action.payload._id);
-        if (index !== -1) {
-          state.transactions[index] = action.payload;
+        // Ensure transactions is an array before using findIndex
+        if (Array.isArray(state.transactions)) {
+          const index = state.transactions.findIndex(t => t._id === action.payload._id);
+          if (index !== -1) {
+            state.transactions[index] = action.payload;
+          }
+        } else {
+          state.transactions = [action.payload];
         }
       })
       .addCase(updateTransaction.rejected, (state, action) => {
@@ -167,7 +189,12 @@ const transactionSlice = createSlice({
       })
       .addCase(deleteTransaction.fulfilled, (state, action) => {
         state.loading = false;
-        state.transactions = state.transactions.filter(t => t._id !== action.payload);
+        // Ensure transactions is an array before using filter
+        if (Array.isArray(state.transactions)) {
+          state.transactions = state.transactions.filter(t => t._id !== action.payload);
+        } else {
+          state.transactions = [];
+        }
       })
       .addCase(deleteTransaction.rejected, (state, action) => {
         state.loading = false;

@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Category = require('../models/Category');
 const Transaction = require('../models/Transaction');
-const Account = require('../models/Account');
+const Budget = require('../models/Budget');
 require('dotenv').config();
 
 const testDatabase = async () => {
@@ -26,16 +26,16 @@ const testDatabase = async () => {
     console.log('\n=== DATABASE OPERATIONS ===');
 
     // Count documents in each collection
-    const userCount = await User.countDocuments();
-    const categoryCount = await Category.countDocuments();
+    const budgetCount = await Budget.countDocuments();
     const transactionCount = await Transaction.countDocuments();
-    const accountCount = await Account.countDocuments();
+    const categoryCount = await Category.countDocuments();
+    const userCount = await User.countDocuments();
 
     console.log('📊 Collection Statistics:');
     console.log(`   - Users: ${userCount}`);
     console.log(`   - Categories: ${categoryCount}`);
     console.log(`   - Transactions: ${transactionCount}`);
-    console.log(`   - Accounts: ${accountCount}`);
+    console.log(`   - Budgets: ${budgetCount}`);
 
     // Test write operation
     console.log('\n=== WRITE OPERATION TEST ===');

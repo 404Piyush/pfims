@@ -35,12 +35,12 @@ const Categories = () => {
   }, [dispatch]);
 
   // Filter categories based on search and type
-  const filteredCategories = categories.filter(category => {
+  const filteredCategories = Array.isArray(categories) ? categories.filter(category => {
     const matchesSearch = category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (category.description && category.description.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesType = typeFilter === 'all' || category.type === typeFilter;
     return matchesSearch && matchesType;
-  });
+  }) : [];
 
   // Group categories by type
   const groupedCategories = filteredCategories.reduce((acc, category) => {
@@ -278,13 +278,13 @@ const Categories = () => {
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-success-600">
-                {categories.filter(c => c.type === 'income').length}
+                {Array.isArray(categories) ? categories.filter(c => c.type === 'income').length : 0}
               </div>
               <div className="text-sm text-secondary-600">Income Categories</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-danger-600">
-                {categories.filter(c => c.type === 'expense').length}
+                {Array.isArray(categories) ? categories.filter(c => c.type === 'expense').length : 0}
               </div>
               <div className="text-sm text-secondary-600">Expense Categories</div>
             </div>

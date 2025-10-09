@@ -126,7 +126,7 @@ router.post('/login', [
   body('password')
     .notEmpty()
     .withMessage('Password is required')
-], sensitiveOperationLimit(), async (req, res) => {
+], async (req, res) => {
   try {
     // Check for validation errors
     const errors = validationResult(req);

@@ -55,7 +55,7 @@ const Budgets = () => {
     const budgetEnd = parseISO(budget.endDate);
     
     // Filter transactions for this budget's category and period
-    const budgetTransactions = transactions.filter(transaction => {
+    const budgetTransactions = Array.isArray(transactions) ? transactions.filter(transaction => {
       const transactionDate = parseISO(transaction.date);
       return (
         transaction.category?._id === budget.category?._id &&
@@ -63,7 +63,7 @@ const Budgets = () => {
         transactionDate >= budgetStart &&
         transactionDate <= budgetEnd
       );
-    });
+    }) : [];
     
     const spent = budgetTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
     const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
@@ -86,14 +86,14 @@ const Budgets = () => {
   };
 
   // Filter budgets based on search and filters
-  const filteredBudgets = budgets.filter(budget => {
+  const filteredBudgets = Array.isArray(budgets) ? budgets.filter(budget => {
     const progress = calculateBudgetProgress(budget);
     const matchesSearch = budget.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (budget.description && budget.description.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === 'all' || progress.status === statusFilter;
     const matchesPeriod = periodFilter === 'all' || budget.period === periodFilter;
     return matchesSearch && matchesStatus && matchesPeriod;
-  });
+  }) : [];
 
   const handleEdit = (budget) => {
     setSelectedBudget(budget);
@@ -172,15 +172,15 @@ const Budgets = () => {
 
   // Calculate overall statistics
   const totalBudgets = budgets.length;
-  const totalBudgetAmount = budgets.reduce((sum, budget) => sum + budget.amount, 0);
-  const totalSpent = budgets.reduce((sum, budget) => {
+  const totalBudgetAmount = Array.isArray(budgets) ? budgets.reduce((sum, budget) => sum + budget.amount, 0) : 0;
+  const totalSpent = Array.isArray(budgets) ? budgets.reduce((sum, budget) => {
     const progress = calculateBudgetProgress(budget);
     return sum + progress.spent;
-  }, 0);
-  const budgetsExceeded = budgets.filter(budget => {
+  }, 0) : 0;
+  const budgetsExceeded = Array.isArray(budgets) ? budgets.filter(budget => {
     const progress = calculateBudgetProgress(budget);
     return progress.status === 'exceeded';
-  }).length;
+  }).length : 0;
 
   if (loading && budgets.length === 0) {
     return <LoadingSpinner />;

@@ -244,7 +244,7 @@ const TransactionForm = ({
             className={`input pl-10 ${errors.category ? 'border-red-500' : ''}`}
           >
             <option value="">Select a category</option>
-            {categories
+            {Array.isArray(categories) && categories
               ?.filter(cat => cat.type === formData.type)
               ?.map((category) => (
                 <option key={category._id} value={category._id}>

@@ -1,5 +1,5 @@
 const nodemailer = require('nodemailer');
-const emailService = require('../services/emailService');
+const emailService = require('../utils/emailService');
 require('dotenv').config();
 
 const testEmailService = async () => {
@@ -10,12 +10,10 @@ const testEmailService = async () => {
     console.log('=== TEST 1: EMAIL CONFIGURATION ===');
     
     const requiredEnvVars = [
-      'SMTP_HOST',
-      'SMTP_PORT', 
-      'SMTP_USER',
-      'SMTP_PASS',
-      'FROM_EMAIL',
-      'FROM_NAME'
+      'EMAIL_HOST',
+      'EMAIL_PORT', 
+      'EMAIL_USER',
+      'EMAIL_PASS'
     ];
 
     let configValid = true;

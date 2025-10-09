@@ -138,8 +138,23 @@ const budgetSlice = createSlice({
       })
       .addCase(fetchBudgets.fulfilled, (state, action) => {
         state.loading = false;
-        state.budgets = action.payload.budgets || action.payload;
-        if (action.payload.stats) {
+        // Handle nested API response structure
+        if (action.payload.data && Array.isArray(action.payload.data.budgets)) {
+          state.budgets = action.payload.data.budgets;
+        } else if (Array.isArray(action.payload.budgets)) {
+          state.budgets = action.payload.budgets;
+        } else if (Array.isArray(action.payload)) {
+          state.budgets = action.payload;
+        } else {
+          state.budgets = [];
+        }
+        
+        // Handle stats from nested structure
+        if (action.payload.data && action.payload.data.summary) {
+          state.stats = action.payload.data.summary;
+        } else if (action.payload.summary) {
+          state.stats = action.payload.summary;
+        } else if (action.payload.stats) {
           state.stats = action.payload.stats;
         }
       })
