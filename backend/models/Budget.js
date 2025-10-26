@@ -170,8 +170,7 @@ budgetSchema.methods.updateSpentAmounts = async function() {
   const transactions = await Transaction.find({
     user: this.user,
     type: 'expense',
-    date: { $gte: this.startDate, $lte: this.endDate },
-    status: 'completed'
+    date: { $gte: this.startDate, $lte: this.endDate }
   }).populate('category');
   
   // Reset spent amounts

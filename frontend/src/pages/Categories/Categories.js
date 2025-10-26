@@ -10,7 +10,7 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
-import { fetchCategories, deleteCategory } from '../../store/slices/categorySlice';
+import { fetchCategories, deleteCategory, createCategory, updateCategory } from '../../store/slices/categorySlice';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
 import Modal from '../../components/UI/Modal';
 import CategoryForm from '../../components/Forms/CategoryForm';
@@ -31,7 +31,7 @@ const Categories = () => {
   
   // Load categories on component mount
   useEffect(() => {
-    dispatch(fetchCategories());
+    dispatch(fetchCategories({ includeStats: true }));
   }, [dispatch]);
 
   // Filter categories based on search and type
@@ -50,6 +50,32 @@ const Categories = () => {
     acc[category.type].push(category);
     return acc;
   }, {});
+
+  const handleCategorySubmit = async (formData) => {
+    try {
+      if (selectedCategory) {
+        // Update existing category
+        await dispatch(updateCategory({ id: selectedCategory._id, ...formData }));
+      } else {
+        // Create new category
+        await dispatch(createCategory(formData));
+      }
+      
+      // Close modal and reset state
+      setShowCategoryModal(false);
+      setSelectedCategory(null);
+      
+      // Refresh categories
+      dispatch(fetchCategories());
+    } catch (error) {
+      console.error('Category submission error:', error);
+    }
+  };
+
+  const handleCategoryCancel = () => {
+    setShowCategoryModal(false);
+    setSelectedCategory(null);
+  };
 
   const handleEdit = (category) => {
     setSelectedCategory(category);
@@ -303,10 +329,9 @@ const Categories = () => {
       >
         <CategoryForm
           category={selectedCategory}
-          onSuccess={() => {
-            setShowCategoryModal(false);
-            setSelectedCategory(null);
-          }}
+          onSubmit={handleCategorySubmit}
+          onCancel={handleCategoryCancel}
+          isLoading={loading}
         />
       </Modal>
 

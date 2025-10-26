@@ -79,8 +79,7 @@ router.get('/', [
         {
           $match: {
             category: { $in: categories.map(cat => cat._id) },
-            user: req.user._id,
-            status: 'completed'
+            user: req.user._id
           }
         },
         {
@@ -193,8 +192,7 @@ router.get('/:id', auth, checkOwnership(Category), async (req, res) => {
         {
           $match: {
             category: category._id,
-            date: { $gte: startOfMonth },
-            status: 'completed'
+            date: { $gte: startOfMonth }
           }
         },
         {
@@ -209,8 +207,7 @@ router.get('/:id', auth, checkOwnership(Category), async (req, res) => {
         {
           $match: {
             category: category._id,
-            date: { $gte: startOfYear },
-            status: 'completed'
+            date: { $gte: startOfYear }
           }
         },
         {
@@ -224,8 +221,7 @@ router.get('/:id', auth, checkOwnership(Category), async (req, res) => {
       Transaction.aggregate([
         {
           $match: {
-            category: category._id,
-            status: 'completed'
+            category: category._id
           }
         },
         {
@@ -403,7 +399,8 @@ router.put('/:id', [
       });
     }
 
-    // Prevent updating default categories' core properties
+    // Allow updating certain properties of default categories (color, description, budget)
+    // but prevent changing core properties like name and type
     if (req.resource.isDefault && (req.body.name || req.body.type)) {
       return res.status(400).json({
         message: 'Cannot modify name or type of default categories'
@@ -659,8 +656,7 @@ router.get('/analytics/usage', auth, async (req, res) => {
       {
         $match: {
           user: req.user._id,
-          date: { $gte: startDate },
-          status: 'completed'
+          date: { $gte: startDate }
         }
       },
       {
