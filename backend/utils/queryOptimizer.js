@@ -12,11 +12,15 @@ class QueryOptimizer {
       {
         $match: {
           user: new mongoose.Types.ObjectId(userId),
-          status: 'completed',
           ...filters
         }
       }
     ];
+
+    // Add status filter only if explicitly provided
+    if (filters.status) {
+      pipeline[0].$match.status = filters.status;
+    }
 
     // Add date filtering if provided
     if (filters.startDate || filters.endDate) {
@@ -34,13 +38,13 @@ class QueryOptimizer {
    */
   static buildTransactionQuery(userId, filters = {}) {
     const query = {
-      user: userId,
-      status: 'completed'
+      user: userId
     };
 
     // Add filters
     if (filters.type) query.type = filters.type;
     if (filters.category) query.category = filters.category;
+    if (filters.status) query.status = filters.status; // Only add status if explicitly provided
     if (filters.startDate || filters.endDate) {
       query.date = {};
       if (filters.startDate) query.date.$gte = new Date(filters.startDate);

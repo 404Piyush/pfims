@@ -76,7 +76,14 @@ const CategoryForm = ({
       return;
     }
 
-    onSubmit(formData);
+    // For default categories, exclude name and type from updates
+    const submitData = { ...formData };
+    if (category?.isDefault) {
+      delete submitData.name;
+      delete submitData.type;
+    }
+
+    onSubmit(submitData);
   };
 
   const handleChange = (field, value) => {
@@ -109,10 +116,14 @@ const CategoryForm = ({
             type="text"
             value={formData.name}
             onChange={(e) => handleChange('name', e.target.value)}
-            className={`input pl-10 ${errors.name ? 'border-red-500' : ''}`}
+            className={`input pl-10 ${errors.name ? 'border-red-500' : ''} ${category?.isDefault ? 'bg-gray-100 cursor-not-allowed' : ''}`}
             placeholder="Enter category name"
+            disabled={category?.isDefault}
           />
         </div>
+        {category?.isDefault && (
+          <p className="mt-1 text-sm text-gray-500">Default category names cannot be changed</p>
+        )}
         {errors.name && (
           <p className="mt-1 text-sm text-red-600">{errors.name}</p>
         )}
@@ -131,17 +142,21 @@ const CategoryForm = ({
             <button
               key={value}
               type="button"
-              onClick={() => handleChange('type', value)}
+              onClick={() => !category?.isDefault && handleChange('type', value)}
+              disabled={category?.isDefault}
               className={`p-3 rounded-lg border-2 transition-colors ${
                 formData.type === value
                   ? `border-${color}-500 bg-${color}-50 text-${color}-700`
                   : 'border-secondary-200 hover:border-secondary-300'
-              }`}
+              } ${category?.isDefault ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span className="font-medium">{label}</span>
             </button>
           ))}
         </div>
+        {category?.isDefault && (
+          <p className="mt-1 text-sm text-gray-500">Default category types cannot be changed</p>
+        )}
         {errors.type && (
           <p className="mt-1 text-sm text-red-600">{errors.type}</p>
         )}

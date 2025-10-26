@@ -107,24 +107,17 @@ const Dashboard = () => {
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        // Fetch recent transactions (limit to 5 for dashboard)
+        // Get date range for current month
+        const now = new Date();
+        const startDate = startOfMonth(now);
+        const endDate = endOfMonth(now);
+        
+        // Fetch all transactions for current month
         await dispatch(fetchTransactions({ 
-          limit: 5, 
+          dateFrom: format(startDate, 'yyyy-MM-dd'),
+          dateTo: format(endDate, 'yyyy-MM-dd'),
           sortBy: 'date', 
           sortOrder: 'desc' 
-        }));
-        
-        // Update dashboard data with real transactions
-        setDashboardData(prev => ({
-          ...prev,
-          recentTransactions: transactions.slice(0, 5).map(transaction => ({
-            id: transaction._id,
-            description: transaction.title || transaction.description,
-            amount: transaction.type === 'expense' ? -transaction.amount : transaction.amount,
-            category: transaction.category?.name || transaction.category || 'Uncategorized',
-            date: transaction.date,
-            type: transaction.type
-          }))
         }));
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -139,8 +132,68 @@ const Dashboard = () => {
   // Update dashboard data when transactions change
   useEffect(() => {
     if (transactions && transactions.length > 0) {
+      // Calculate real financial metrics from transactions
+      const currentMonthTransactions = transactions.filter(transaction => {
+        const transactionDate = new Date(transaction.date);
+        const now = new Date();
+        return transactionDate.getMonth() === now.getMonth() && 
+               transactionDate.getFullYear() === now.getFullYear();
+      });
+
+      // Calculate previous month for comparison
+      const previousMonth = new Date();
+      previousMonth.setMonth(previousMonth.getMonth() - 1);
+      
+      const previousMonthTransactions = transactions.filter(transaction => {
+        const transactionDate = new Date(transaction.date);
+        return transactionDate.getMonth() === previousMonth.getMonth() && 
+               transactionDate.getFullYear() === previousMonth.getFullYear();
+      });
+
+      const monthlyIncome = currentMonthTransactions
+        .filter(t => t.type === 'income')
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const monthlyExpenses = currentMonthTransactions
+        .filter(t => t.type === 'expense')
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const previousMonthIncome = previousMonthTransactions
+        .filter(t => t.type === 'income')
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const previousMonthExpenses = previousMonthTransactions
+        .filter(t => t.type === 'expense')
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const monthlyNet = monthlyIncome - monthlyExpenses;
+      const previousMonthNet = previousMonthIncome - previousMonthExpenses;
+      const savingsRate = monthlyIncome > 0 ? ((monthlyNet / monthlyIncome) * 100) : 0;
+
+      // Calculate percentage changes
+      const incomeChange = previousMonthIncome > 0 ? 
+        (((monthlyIncome - previousMonthIncome) / previousMonthIncome) * 100) : 0;
+      const expenseChange = previousMonthExpenses > 0 ? 
+        (((monthlyExpenses - previousMonthExpenses) / previousMonthExpenses) * 100) : 0;
+      const netChange = previousMonthNet !== 0 ? 
+        (((monthlyNet - previousMonthNet) / Math.abs(previousMonthNet)) * 100) : 0;
+
       setDashboardData(prev => ({
         ...prev,
+        summary: {
+          ...prev.summary,
+          monthlyIncome,
+          monthlyExpenses,
+          monthlyNet,
+          savingsRate,
+          totalBalance: prev.summary.totalBalance + monthlyNet // Simple approximation
+        },
+        changes: {
+          income: incomeChange,
+          expenses: expenseChange,
+          net: netChange,
+          balance: netChange // Use net change for balance change approximation
+        },
         recentTransactions: transactions.slice(0, 5).map(transaction => ({
           id: transaction._id,
           description: transaction.title || transaction.description,
@@ -229,34 +282,42 @@ const Dashboard = () => {
         <StatCard
           title="Total Balance"
           value={formatCurrency(dashboardData.summary.totalBalance)}
-          change="+2.5% from last month"
+          change={dashboardData.changes?.balance ? 
+            `${dashboardData.changes.balance >= 0 ? '+' : ''}${dashboardData.changes.balance.toFixed(1)}% from last month` : 
+            'No previous data'}
           icon={BanknotesIcon}
           color="primary"
-          trend="up"
+          trend={dashboardData.changes?.balance >= 0 ? "up" : "down"}
         />
         <StatCard
           title="Monthly Income"
           value={formatCurrency(dashboardData.summary.monthlyIncome)}
-          change="+4.1% from last month"
+          change={dashboardData.changes?.income ? 
+            `${dashboardData.changes.income >= 0 ? '+' : ''}${dashboardData.changes.income.toFixed(1)}% from last month` : 
+            'No previous data'}
           icon={ArrowTrendingUpIcon}
           color="success"
-          trend="up"
+          trend={dashboardData.changes?.income >= 0 ? "up" : "down"}
         />
         <StatCard
           title="Monthly Expenses"
           value={formatCurrency(dashboardData.summary.monthlyExpenses)}
-          change="-1.2% from last month"
+          change={dashboardData.changes?.expenses ? 
+            `${dashboardData.changes.expenses >= 0 ? '+' : ''}${dashboardData.changes.expenses.toFixed(1)}% from last month` : 
+            'No previous data'}
           icon={ArrowTrendingDownIcon}
           color="danger"
-          trend="down"
+          trend={dashboardData.changes?.expenses >= 0 ? "up" : "down"}
         />
         <StatCard
           title="Net Income"
           value={formatCurrency(dashboardData.summary.monthlyNet)}
-          change="+12.3% from last month"
+          change={dashboardData.changes?.net ? 
+            `${dashboardData.changes.net >= 0 ? '+' : ''}${dashboardData.changes.net.toFixed(1)}% from last month` : 
+            'No previous data'}
           icon={ChartBarIcon}
           color="primary"
-          trend="up"
+          trend={dashboardData.changes?.net >= 0 ? "up" : "down"}
         />
       </div>
 

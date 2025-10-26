@@ -65,6 +65,15 @@ const TransactionForm = ({
 
     if (!formData.date) {
       newErrors.date = 'Date is required';
+    } else {
+      // Validate that date is not in the future
+      const selectedDate = new Date(formData.date);
+      const today = new Date();
+      today.setHours(23, 59, 59, 999); // Set to end of today
+      
+      if (selectedDate > today) {
+        newErrors.date = 'Transaction date cannot be in the future';
+      }
     }
 
     setErrors(newErrors);

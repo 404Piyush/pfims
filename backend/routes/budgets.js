@@ -183,8 +183,7 @@ router.get('/:id', auth, checkOwnership(Budget), async (req, res) => {
           user: req.user._id,
           category: { $in: budget.categories.map(cat => cat.category._id) },
           date: { $gte: budget.startDate, $lte: budget.endDate },
-          type: 'expense',
-          status: 'completed'
+          type: 'expense'
         }
       },
       {
@@ -208,8 +207,7 @@ router.get('/:id', auth, checkOwnership(Budget), async (req, res) => {
           user: req.user._id,
           category: { $in: budget.categories.map(cat => cat.category._id) },
           date: { $gte: budget.startDate, $lte: budget.endDate },
-          type: 'expense',
-          status: 'completed'
+          type: 'expense'
         }
       },
       {
@@ -458,8 +456,7 @@ router.put('/:id', [
                   user: req.user._id,
                   category: cat.category,
                   date: { $gte: req.resource.startDate, $lte: req.resource.endDate },
-                  type: 'expense',
-                  status: 'completed'
+                  type: 'expense'
                 }
               },
               {

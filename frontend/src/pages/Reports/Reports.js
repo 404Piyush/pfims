@@ -23,7 +23,7 @@ const Reports = () => {
   const { budgets } = useSelector((state) => state.budgets);
   
   // State for date range and filters
-  const [dateRange, setDateRange] = useState('thisMonth');
+  const [dateRange, setDateRange] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [reportType, setReportType] = useState('overview');
   const [customDateFrom, setCustomDateFrom] = useState('');
@@ -32,13 +32,10 @@ const Reports = () => {
   // Load data on component mount and when filters change
   useEffect(() => {
     const { startDate, endDate } = getDateRange();
-    dispatch(fetchTransactions({ 
-      dateFrom: format(startDate, 'yyyy-MM-dd'),
-      dateTo: format(endDate, 'yyyy-MM-dd')
-    }));
+    dispatch(fetchTransactions()); // Remove status filter to get all transactions
     dispatch(fetchCategories());
     dispatch(fetchBudgets());
-  }, [dispatch, dateRange, customDateFrom, customDateTo]);
+  }, [dispatch, dateRange, categoryFilter]);
 
   // Get date range based on selection
   const getDateRange = () => {
@@ -63,6 +60,13 @@ const Reports = () => {
 
   // Filter transactions based on current filters
   const filteredTransactions = Array.isArray(transactions) ? transactions.filter(transaction => {
+    // For "all" date range, don't filter by date
+    if (dateRange === 'all') {
+      const inCategory = categoryFilter === 'all' || transaction.category?._id === categoryFilter;
+      return inCategory;
+    }
+    
+    // For other date ranges, apply date filtering
     const { startDate, endDate } = getDateRange();
     const transactionDate = parseISO(transaction.date);
     const inDateRange = transactionDate >= startDate && transactionDate <= endDate;
@@ -83,7 +87,12 @@ const Reports = () => {
     const netIncome = income - expenses;
     const savingsRate = income > 0 ? ((netIncome / income) * 100) : 0;
     
-    return { income, expenses, netIncome, savingsRate };
+    return { 
+      income, 
+      expenses, 
+      netIncome, 
+      savingsRate: isNaN(savingsRate) ? 0 : savingsRate 
+    };
   };
 
   // Get spending by category
@@ -144,24 +153,38 @@ const Reports = () => {
   const getBudgetPerformance = () => {
     return Array.isArray(budgets) ? budgets.map(budget => {
       const { startDate, endDate } = getDateRange();
+      
+      // Calculate total budget amount from all categories
+      const totalBudgetAmount = Array.isArray(budget.categories) 
+        ? budget.categories.reduce((sum, cat) => sum + (cat.budgetAmount || 0), 0)
+        : (budget.totalBudget || budget.amount || 0);
+      
+      // Get category IDs for this budget
+      const budgetCategoryIds = Array.isArray(budget.categories) 
+        ? budget.categories.map(cat => cat.category?._id || cat.category)
+        : [budget.category?._id || budget.category].filter(Boolean);
+      
+      // Filter transactions for this budget's categories and period
       const budgetTransactions = filteredTransactions.filter(transaction => {
         const transactionDate = parseISO(transaction.date);
+        const categoryId = transaction.category?._id || transaction.category;
         return (
-          transaction.category?._id === budget.category?._id &&
+          budgetCategoryIds.includes(categoryId) &&
           transaction.type === 'expense' &&
           transactionDate >= parseISO(budget.startDate) &&
           transactionDate <= parseISO(budget.endDate)
         );
       });
       
-      const spent = budgetTransactions.reduce((sum, t) => sum + t.amount, 0);
-      const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
+      const spent = budgetTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+      const percentage = totalBudgetAmount > 0 ? (spent / totalBudgetAmount) * 100 : 0;
       
       return {
         ...budget,
-        spent,
-        percentage,
-        remaining: budget.amount - spent,
+        spent: isNaN(spent) ? 0 : spent,
+        percentage: isNaN(percentage) ? 0 : percentage,
+        remaining: isNaN(totalBudgetAmount - spent) ? totalBudgetAmount : totalBudgetAmount - spent,
+        amount: totalBudgetAmount, // Add this for display consistency
         status: percentage >= 100 ? 'exceeded' : percentage >= 80 ? 'warning' : 'on-track'
       };
     }) : [];
@@ -225,6 +248,7 @@ const Reports = () => {
                 onChange={(e) => setDateRange(e.target.value)}
                 className="input"
               >
+                <option value="all">All Transactions</option>
                 <option value="thisMonth">This Month</option>
                 <option value="lastMonth">Last Month</option>
                 <option value="thisYear">This Year</option>
@@ -325,7 +349,7 @@ const Reports = () => {
             <div>
               <p className="text-sm font-medium text-secondary-600">Savings Rate</p>
               <p className={`text-2xl font-bold ${metrics.savingsRate >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
-                {metrics.savingsRate.toFixed(1)}%
+                {isNaN(metrics.savingsRate) ? '0.0' : metrics.savingsRate.toFixed(1)}%
               </p>
             </div>
             <div className="h-12 w-12 bg-warning-100 rounded-lg flex items-center justify-center">
@@ -403,10 +427,10 @@ const Reports = () => {
                 </div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-secondary-600">
-                    {formatCurrency(budget.spent)} / {formatCurrency(budget.amount)}
+                    {formatCurrency(budget.spent || 0)} / {formatCurrency(budget.amount || 0)}
                   </span>
                   <span className="text-sm text-secondary-600">
-                    {budget.percentage.toFixed(1)}%
+                    {(budget.percentage || 0).toFixed(1)}%
                   </span>
                 </div>
                 <div className="w-full bg-secondary-200 rounded-full h-2">
@@ -415,7 +439,7 @@ const Reports = () => {
                       budget.status === 'exceeded' ? 'bg-danger-500' :
                       budget.status === 'warning' ? 'bg-warning-500' : 'bg-success-500'
                     }`}
-                    style={{ width: `${Math.min(budget.percentage, 100)}%` }}
+                    style={{ width: `${Math.min(budget.percentage || 0, 100)}%` }}
                   ></div>
                 </div>
               </div>

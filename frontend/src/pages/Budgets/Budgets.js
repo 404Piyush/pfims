@@ -14,7 +14,7 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
-import { fetchBudgets, deleteBudget } from '../../store/slices/budgetSlice';
+import { fetchBudgets, deleteBudget, createBudget, updateBudget } from '../../store/slices/budgetSlice';
 import { fetchCategories } from '../../store/slices/categorySlice';
 import { fetchTransactions } from '../../store/slices/transactionSlice';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
@@ -54,20 +54,31 @@ const Budgets = () => {
     const budgetStart = parseISO(budget.startDate);
     const budgetEnd = parseISO(budget.endDate);
     
-    // Filter transactions for this budget's category and period
+    // Calculate total budget amount from all categories
+    const totalBudgetAmount = Array.isArray(budget.categories) 
+      ? budget.categories.reduce((sum, cat) => sum + (cat.budgetAmount || 0), 0)
+      : (budget.totalBudget || 0);
+    
+    // Get category IDs for this budget
+    const budgetCategoryIds = Array.isArray(budget.categories) 
+      ? budget.categories.map(cat => cat.category?._id || cat.category)
+      : [];
+    
+    // Filter transactions for this budget's categories and period
     const budgetTransactions = Array.isArray(transactions) ? transactions.filter(transaction => {
       const transactionDate = parseISO(transaction.date);
+      const categoryId = transaction.category?._id || transaction.category;
       return (
-        transaction.category?._id === budget.category?._id &&
+        budgetCategoryIds.includes(categoryId) &&
         transaction.type === 'expense' &&
         transactionDate >= budgetStart &&
         transactionDate <= budgetEnd
       );
     }) : [];
     
-    const spent = budgetTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
-    const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
-    const remaining = budget.amount - spent;
+    const spent = budgetTransactions.reduce((sum, transaction) => sum + (transaction.amount || 0), 0);
+    const percentage = totalBudgetAmount > 0 ? (spent / totalBudgetAmount) * 100 : 0;
+    const remaining = totalBudgetAmount - spent;
     
     let status = 'on-track';
     if (percentage >= 100) {
@@ -76,12 +87,14 @@ const Budgets = () => {
       status = 'warning';
     }
     
+    // Ensure no NaN values
     return {
-      spent,
-      percentage: Math.min(percentage, 100),
-      remaining,
+      spent: isNaN(spent) ? 0 : spent,
+      percentage: isNaN(percentage) ? 0 : Math.min(percentage, 100),
+      remaining: isNaN(remaining) ? totalBudgetAmount : remaining,
       status,
-      transactionCount: budgetTransactions.length
+      transactionCount: budgetTransactions.length,
+      totalBudgetAmount: isNaN(totalBudgetAmount) ? 0 : totalBudgetAmount
     };
   };
 
@@ -110,6 +123,23 @@ const Budgets = () => {
       await dispatch(deleteBudget(selectedBudget._id));
       setShowDeleteDialog(false);
       setSelectedBudget(null);
+    }
+  };
+
+  // Handle budget form submission
+  const handleBudgetSubmit = async (budgetData) => {
+    try {
+      if (selectedBudget) {
+        // Update existing budget
+        await dispatch(updateBudget({ id: selectedBudget._id, budgetData }));
+      } else {
+        // Create new budget
+        await dispatch(createBudget(budgetData));
+      }
+      setShowBudgetModal(false);
+      setSelectedBudget(null);
+    } catch (error) {
+      console.error('Error saving budget:', error);
     }
   };
 
@@ -172,11 +202,19 @@ const Budgets = () => {
 
   // Calculate overall statistics
   const totalBudgets = budgets.length;
-  const totalBudgetAmount = Array.isArray(budgets) ? budgets.reduce((sum, budget) => sum + budget.amount, 0) : 0;
+  const totalBudgetAmount = Array.isArray(budgets) ? budgets.reduce((sum, budget) => {
+    // Calculate total from categories array or use totalBudget field
+    const budgetAmount = Array.isArray(budget.categories) 
+      ? budget.categories.reduce((catSum, cat) => catSum + (cat.budgetAmount || 0), 0)
+      : (budget.totalBudget || 0);
+    return sum + budgetAmount;
+  }, 0) : 0;
+  
   const totalSpent = Array.isArray(budgets) ? budgets.reduce((sum, budget) => {
     const progress = calculateBudgetProgress(budget);
     return sum + progress.spent;
   }, 0) : 0;
+  
   const budgetsExceeded = Array.isArray(budgets) ? budgets.filter(budget => {
     const progress = calculateBudgetProgress(budget);
     return progress.status === 'exceeded';
@@ -315,7 +353,11 @@ const Budgets = () => {
                   </h3>
                   <div className="flex items-center space-x-2 mb-2">
                     <span className="text-sm text-secondary-600">
-                      {budget.category?.name || 'All Categories'}
+                      {Array.isArray(budget.categories) && budget.categories.length > 0
+                        ? budget.categories.length === 1 
+                          ? budget.categories[0].category?.name || 'Category'
+                          : `${budget.categories.length} Categories`
+                        : 'All Categories'}
                     </span>
                     <span className="text-secondary-400">•</span>
                     <span className="text-sm text-secondary-600">
@@ -355,16 +397,16 @@ const Budgets = () => {
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-secondary-700">
-                    {formatCurrency(progress.spent)} of {formatCurrency(budget.amount)}
+                    {formatCurrency(progress.spent)} / {formatCurrency(progress.totalBudgetAmount || 0)}
                   </span>
                   <span className="text-sm text-secondary-600">
-                    {progress.percentage.toFixed(1)}%
+                    {(progress.percentage || 0).toFixed(1)}%
                   </span>
                 </div>
                 <div className="w-full bg-secondary-200 rounded-full h-2">
                   <div
                     className={`h-2 rounded-full transition-all duration-300 ${getProgressBarColor(progress.status)}`}
-                    style={{ width: `${Math.min(progress.percentage, 100)}%` }}
+                    style={{ width: `${Math.min(progress.percentage || 0, 100)}%` }}
                   ></div>
                 </div>
               </div>
@@ -373,15 +415,15 @@ const Budgets = () => {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-secondary-600">Remaining:</span>
-                  <div className={`font-semibold ${progress.remaining >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
-                    {formatCurrency(Math.abs(progress.remaining))}
-                    {progress.remaining < 0 && ' over'}
+                  <div className={`font-semibold ${(progress.remaining || 0) >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
+                    {formatCurrency(Math.abs(progress.remaining || 0))}
+                    {(progress.remaining || 0) < 0 && ' over'}
                   </div>
                 </div>
                 <div>
                   <span className="text-secondary-600">Transactions:</span>
                   <div className="font-semibold text-secondary-900">
-                    {progress.transactionCount}
+                    {progress.transactionCount || 0}
                   </div>
                 </div>
               </div>
@@ -438,11 +480,12 @@ const Budgets = () => {
       >
         <BudgetForm
           budget={selectedBudget}
-          categories={categories}
-          onSuccess={() => {
+          onSubmit={handleBudgetSubmit}
+          onCancel={() => {
             setShowBudgetModal(false);
             setSelectedBudget(null);
           }}
+          isLoading={loading}
         />
       </Modal>
 
