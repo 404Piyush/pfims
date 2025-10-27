@@ -459,4 +459,63 @@ router.post('/verify-email', [
   }
 });
 
+router.post('/resend-verification', [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email'),
+], sensitiveOperationLimit(15 * 60 * 1000, 3), async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email } = req.body;
+
+    // Find user by email
+    const user = await User.findOne({ email });
+
+    // Always respond generically to avoid email enumeration
+    if (!user) {
+      return res.json({
+        message: 'If an account exists for this email, a verification email has been sent.'
+      });
+    }
+
+    if (user.isEmailVerified) {
+      return res.status(400).json({
+        message: 'Email is already verified'
+      });
+    }
+
+    // Generate new verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+
+    user.emailVerificationToken = hashedToken;
+    user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    await user.save();
+
+    try {
+      const emailResult = await emailService.sendVerificationEmail(user, verificationToken);
+      if (!emailResult.success) {
+        console.error('Failed to send verification email:', emailResult.error);
+        return res.status(500).json({ message: 'Failed to send verification email. Please try again later.' });
+      }
+    } catch (emailError) {
+      console.error('Email service error:', emailError);
+      return res.status(500).json({ message: 'Failed to send verification email. Please try again later.' });
+    }
+
+    return res.json({ message: 'Verification email sent successfully.' });
+  } catch (error) {
+    console.error('Resend verification error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

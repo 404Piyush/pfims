@@ -4,6 +4,7 @@ const Transaction = require('../models/Transaction');
 const Budget = require('../models/Budget');
 const Category = require('../models/Category');
 const { auth } = require('../middleware/auth');
+const emailService = require('../utils/emailService');
 
 const router = express.Router();
 
@@ -945,6 +946,110 @@ router.get('/export', [
     res.status(500).json({
       message: 'Server error exporting data'
     });
+  }
+});
+
+/* module.exports set at file end */
+// @route   POST /api/reports/email/weekly
+// @desc    Send weekly financial summary email
+// @access  Private
+router.post('/email/weekly', auth, async (req, res) => {
+  try {
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(now.getDate() - 7);
+    const dateRange = { $gte: start, $lte: now };
+
+    const [incomeExpenseSummary, categoryBreakdown] = await Promise.all([
+      Transaction.aggregate([
+        { $match: { user: req.user._id, date: dateRange, status: 'completed' } },
+        { $group: { _id: '$type', total: { $sum: '$amount' }, count: { $sum: 1 }, average: { $avg: '$amount' } } }
+      ]),
+      Transaction.aggregate([
+        { $match: { user: req.user._id, date: dateRange, status: 'completed' } },
+        { $lookup: { from: 'categories', localField: 'category', foreignField: '_id', as: 'categoryInfo' } },
+        { $unwind: '$categoryInfo' },
+        { $group: { _id: { category: '$category', type: '$type' }, categoryName: { $first: '$categoryInfo.name' }, categoryColor: { $first: '$categoryInfo.color' }, categoryIcon: { $first: '$categoryInfo.icon' }, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+        { $sort: { total: -1 } }
+      ])
+    ]);
+
+    const summary = { income: 0, expense: 0, netIncome: 0, transactionCount: 0 };
+    incomeExpenseSummary.forEach(item => { summary[item._id] = item.total; summary.transactionCount += item.count; });
+    summary.netIncome = summary.income - summary.expense;
+
+    const topCategories = categoryBreakdown
+      .filter(c => c._id.type === 'expense')
+      .slice(0, 5)
+      .map(c => ({ categoryName: c.categoryName, total: c.total }));
+
+    // Respect user preference if set
+    if (req.user.notifications && req.user.notifications.weeklyReports === false) {
+      return res.status(400).json({ message: 'Weekly report emails are disabled in your settings.' });
+    }
+
+    const report = { summary, topCategories, periodRange: { start, end: now } };
+    const result = await emailService.sendReportEmail(req.user, report, 'weekly');
+
+    if (!result.success) {
+      return res.status(500).json({ message: 'Failed to send weekly report email', error: result.error });
+    }
+
+    res.json({ message: 'Weekly report email has been queued', result });
+  } catch (error) {
+    console.error('Send weekly report email error:', error);
+    res.status(500).json({ message: 'Server error sending weekly report email' });
+  }
+});
+
+// @route   POST /api/reports/email/monthly
+// @desc    Send monthly financial summary email
+// @access  Private
+router.post('/email/monthly', auth, async (req, res) => {
+  try {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const dateRange = { $gte: start, $lte: now };
+
+    const [incomeExpenseSummary, categoryBreakdown] = await Promise.all([
+      Transaction.aggregate([
+        { $match: { user: req.user._id, date: dateRange, status: 'completed' } },
+        { $group: { _id: '$type', total: { $sum: '$amount' }, count: { $sum: 1 }, average: { $avg: '$amount' } } }
+      ]),
+      Transaction.aggregate([
+        { $match: { user: req.user._id, date: dateRange, status: 'completed' } },
+        { $lookup: { from: 'categories', localField: 'category', foreignField: '_id', as: 'categoryInfo' } },
+        { $unwind: '$categoryInfo' },
+        { $group: { _id: { category: '$category', type: '$type' }, categoryName: { $first: '$categoryInfo.name' }, categoryColor: { $first: '$categoryInfo.color' }, categoryIcon: { $first: '$categoryInfo.icon' }, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+        { $sort: { total: -1 } }
+      ])
+    ]);
+
+    const summary = { income: 0, expense: 0, netIncome: 0, transactionCount: 0 };
+    incomeExpenseSummary.forEach(item => { summary[item._id] = item.total; summary.transactionCount += item.count; });
+    summary.netIncome = summary.income - summary.expense;
+
+    const topCategories = categoryBreakdown
+      .filter(c => c._id.type === 'expense')
+      .slice(0, 5)
+      .map(c => ({ categoryName: c.categoryName, total: c.total }));
+
+    // Respect user preference if set
+    if (req.user.notifications && req.user.notifications.monthlyReports === false) {
+      return res.status(400).json({ message: 'Monthly report emails are disabled in your settings.' });
+    }
+
+    const report = { summary, topCategories, periodRange: { start, end: now } };
+    const result = await emailService.sendReportEmail(req.user, report, 'monthly');
+
+    if (!result.success) {
+      return res.status(500).json({ message: 'Failed to send monthly report email', error: result.error });
+    }
+
+    res.json({ message: 'Monthly report email has been queued', result });
+  } catch (error) {
+    console.error('Send monthly report email error:', error);
+    res.status(500).json({ message: 'Server error sending monthly report email' });
   }
 });
 
