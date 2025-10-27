@@ -12,6 +12,7 @@ import {
   Cog6ToothIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline';
 import {
   HomeIcon as HomeIconSolid,
@@ -21,6 +22,7 @@ import {
   DocumentChartBarIcon as DocumentChartBarIconSolid,
   UserIcon as UserIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
+  ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
 } from '@heroicons/react/24/solid';
 import { toggleSidebar } from '../../store/slices/uiSlice';
 
@@ -54,6 +56,12 @@ const navigation = [
     href: '/reports',
     icon: DocumentChartBarIcon,
     iconSolid: DocumentChartBarIconSolid,
+  },
+  {
+    name: 'Assistant',
+    href: '/assistant',
+    icon: ChatBubbleLeftRightIcon,
+    iconSolid: ChatBubbleLeftRightIconSolid,
   },
 ];
 

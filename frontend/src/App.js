@@ -25,6 +25,7 @@ import Budgets from './pages/Budgets/Budgets';
 import Reports from './pages/Reports/Reports';
 import Profile from './pages/Profile/Profile';
 import Settings from './pages/Settings/Settings';
+import Assistant from './pages/Assistant/Assistant';
 
 // Error pages
 import NotFound from './pages/Error/NotFound';
@@ -106,6 +107,7 @@ function App() {
               <Route path="categories" element={<Categories />} />
               <Route path="budgets" element={<Budgets />} />
               <Route path="reports" element={<Reports />} />
+              <Route path="assistant" element={<Assistant />} />
               <Route path="profile" element={<Profile />} />
               <Route path="settings" element={<Settings />} />
             </Route>

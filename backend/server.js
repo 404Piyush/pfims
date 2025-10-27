@@ -74,6 +74,7 @@ app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/budgets', require('./routes/budgets'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/chatbot', require('./routes/chatbot'));
 
 // Health check endpoint with database status
 app.get('/api/health', (req, res) => {
