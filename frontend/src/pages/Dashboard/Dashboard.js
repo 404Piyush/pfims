@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns';
 import { fetchTransactions } from '../../store/slices/transactionSlice';
 import api from '../../services/api';
 import {
@@ -118,8 +118,8 @@ const Dashboard = () => {
 
         // Fetch recent transactions for the current month for the list (uses slice store)
         await dispatch(fetchTransactions({
-          startDate: format(currentStart, 'yyyy-MM-dd'),
-          endDate: format(currentEnd, 'yyyy-MM-dd'),
+          startDate: startOfDay(currentStart).toISOString(),
+          endDate: endOfDay(currentEnd).toISOString(),
           sortBy: 'date',
           sortOrder: 'desc',
           limit: 100
@@ -130,15 +130,15 @@ const Dashboard = () => {
           api.get('/transactions/analytics/summary', {
             params: {
               period: 'custom',
-              startDate: format(currentStart, 'yyyy-MM-dd'),
-              endDate: format(currentEnd, 'yyyy-MM-dd')
+              startDate: startOfDay(currentStart).toISOString(),
+              endDate: endOfDay(currentEnd).toISOString()
             }
           }),
           api.get('/transactions/analytics/summary', {
             params: {
               period: 'custom',
-              startDate: format(prevStart, 'yyyy-MM-dd'),
-              endDate: format(prevEnd, 'yyyy-MM-dd')
+              startDate: startOfDay(prevStart).toISOString(),
+              endDate: endOfDay(prevEnd).toISOString()
             }
           }),
           // Overall balance to date (simple approximation using all recorded transactions)

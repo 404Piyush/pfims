@@ -191,15 +191,19 @@ const transactionSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(createTransaction.fulfilled, (state, action) => {
-        state.loading = false;
-        // Ensure transactions is an array before using unshift
-        if (Array.isArray(state.transactions)) {
-          state.transactions.unshift(action.payload);
-        } else {
-          state.transactions = [action.payload];
-        }
-      })
+  .addCase(createTransaction.fulfilled, (state, action) => {
+    state.loading = false;
+    // Normalize payload shape to the actual transaction object
+    const created = action.payload?.data?.transaction
+      || action.payload?.transaction
+      || action.payload;
+    // Ensure transactions is an array before using unshift
+    if (Array.isArray(state.transactions)) {
+      state.transactions.unshift(created);
+    } else {
+      state.transactions = [created];
+    }
+  })
       .addCase(createTransaction.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
@@ -210,18 +214,25 @@ const transactionSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(updateTransaction.fulfilled, (state, action) => {
-        state.loading = false;
-        // Ensure transactions is an array before using findIndex
-        if (Array.isArray(state.transactions)) {
-          const index = state.transactions.findIndex(t => t._id === action.payload._id);
-          if (index !== -1) {
-            state.transactions[index] = action.payload;
-          }
-        } else {
-          state.transactions = [action.payload];
-        }
-      })
+  .addCase(updateTransaction.fulfilled, (state, action) => {
+    state.loading = false;
+    // Normalize payload shape to the actual transaction object
+    const updated = action.payload?.data?.transaction
+      || action.payload?.transaction
+      || action.payload;
+    // Ensure transactions is an array before using findIndex
+    if (Array.isArray(state.transactions)) {
+      const index = state.transactions.findIndex(t => t._id === updated?._id);
+      if (index !== -1) {
+        state.transactions[index] = updated;
+      } else if (updated) {
+        // If not found, append updated transaction
+        state.transactions.push(updated);
+      }
+    } else {
+      state.transactions = updated ? [updated] : [];
+    }
+  })
       .addCase(updateTransaction.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;

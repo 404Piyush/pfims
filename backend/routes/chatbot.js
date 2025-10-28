@@ -42,10 +42,22 @@ const fetchWithTimeout = async (url, options, timeoutMs) => {
   }
 };
 
-// Helper to derive a simple title from first user message
+// Helper to derive a concise title from the first user message
 const deriveTitle = (text) => {
   if (!text) return 'New Chat';
-  const clean = String(text).trim().replace(/\s+/g, ' ');
+  let clean = String(text);
+  // If message contains a Context/Question format, prefer the question part
+  const lower = clean.toLowerCase();
+  const qIdx = lower.indexOf('question:');
+  if (qIdx !== -1) {
+    clean = clean.slice(qIdx + 'question:'.length);
+  }
+  // Remove leading "Context:" if present
+  if (clean.trim().toLowerCase().startsWith('context:')) {
+    clean = clean.replace(/^context:\s*/i, '');
+  }
+  // Normalize whitespace and trim
+  clean = clean.replace(/\s+/g, ' ').trim();
   const words = clean.split(' ').slice(0, 8).join(' ');
   return words || 'New Chat';
 };
@@ -82,7 +94,7 @@ router.post(
       .isString()
       .withMessage('provider must be a string ("ollama" or "atlas")'),
     body('sessionId')
-      .optional()
+      .optional({ nullable: true, checkFalsy: true })
       .isMongoId()
       .withMessage('sessionId must be a valid Mongo ID')
   ],

@@ -473,6 +473,7 @@ router.get('/me', auth, async (req, res) => {
         email: req.user.email,
         currency: req.user.currency,
         timezone: req.user.timezone,
+        notifications: req.user.notifications,
         isEmailVerified: req.user.isEmailVerified,
         lastLogin: req.user.lastLogin,
         createdAt: req.user.createdAt

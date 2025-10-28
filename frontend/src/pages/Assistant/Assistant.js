@@ -75,7 +75,7 @@ const Assistant = () => {
 
   const findCategoryName = (id) => {
     if (!id || id === 'all') return 'All Categories';
-    const c = Array.isArray(categories) ? categories.find((x) => String(x.id) === String(id)) : null;
+    const c = Array.isArray(categories) ? categories.find((x) => String(x._id) === String(id)) : null;
     return c?.name || 'Unknown';
   };
 
@@ -110,13 +110,21 @@ const Assistant = () => {
         api.get('/transactions', { params: txParams }),
       ]);
 
-      const summary = summaryRes.data?.data || summaryRes.data || {};
-      const txs = txRes.data?.data || txRes.data?.transactions || txRes.data || [];
+      const summaryPayload = summaryRes.data?.data || summaryRes.data || {};
+      const summary = summaryPayload;
+      const txPayload = txRes.data?.data || txRes.data || {};
+      const txs = Array.isArray(txPayload?.transactions)
+        ? txPayload.transactions
+        : Array.isArray(txRes.data?.transactions)
+          ? txRes.data.transactions
+          : Array.isArray(txRes.data)
+            ? txRes.data
+            : [];
 
       // Compute totals as fallback if summary not provided
       const totals = {
-        income: Number(summary?.totals?.income ?? 0),
-        expense: Number(summary?.totals?.expense ?? 0),
+        income: Number(summary?.totalIncome ?? summary?.totals?.income ?? 0),
+        expense: Number(summary?.totalExpense ?? summary?.totals?.expense ?? 0),
       };
       // If a specific category is selected, recompute totals from filtered transactions
       if (selectedCategoryId !== 'all' || !summary?.totals) {
@@ -133,7 +141,7 @@ const Assistant = () => {
       // Top categories (expense side)
       const topExpenses = (summary?.categories?.expense || [])
         .slice(0, 5)
-        .map((c) => `${c.name}: ₹${Number(c.amount ?? 0).toFixed(2)}${c.percent != null ? ` (${Number(c.percent).toFixed(1)}%)` : ''}`);
+        .map((c) => `${c.name}: ₹${Number((c.totalAmount ?? c.amount) ?? 0).toFixed(2)}${c.percentage != null ? ` (${Number(c.percentage).toFixed(1)}%)` : ''}`);
 
       // Largest transactions by absolute amount
       const largestTxns = [...txs]
@@ -332,7 +340,7 @@ const Assistant = () => {
               <PlusCircleIcon className="h-4 w-4 mr-1" /> New
             </button>
             <select
-              className="text-sm border border-secondary-300 rounded-md px-2 py-1"
+              className="text-sm border border-secondary-300 rounded-md px-2 py-1 w-64"
               value={selectedSessionId || ''}
               onChange={(e) => {
                 const id = e.target.value || '';
@@ -389,7 +397,7 @@ const Assistant = () => {
             >
               <option value="all">All Categories</option>
               {(Array.isArray(categories) ? categories : []).map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c._id} value={c._id}>{c.name}</option>
               ))}
             </select>
             <label className="flex items-center space-x-2 text-sm text-secondary-700">
@@ -401,7 +409,7 @@ const Assistant = () => {
               />
               <span>Attach context</span>
             </label>
-            <span className="text-xs bg-secondary-100 text-secondary-700 px-2 py-1 rounded-md border border-secondary-200 whitespace-nowrap" title="Context preview">
+            <span className="text-xs bg-secondary-100 text-secondary-700 px-2 py-1 rounded-md border border-secondary-200 truncate max-w-[280px]" title={contextPreview || 'Context preview'}>
               {contextLoading ? 'Loading context…' : (contextPreview || 'Context not ready')}
             </span>
           </div>
