@@ -2,6 +2,11 @@ const { validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const slowDown = require('express-slow-down');
 
+// Determine environment and whether to disable rate limiting
+const isDevEnv = (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test');
+const disableRateLimit = isDevEnv || String(process.env.DISABLE_RATE_LIMIT).toLowerCase() === 'true';
+const noopMiddleware = (req, res, next) => next();
+
 /**
  * Middleware to handle validation errors
  */
@@ -53,20 +58,26 @@ const createSlowDown = (windowMs = 15 * 60 * 1000, delayAfter = 50, delay = 500)
 /**
  * Strict rate limiting for authentication endpoints
  */
-const authRateLimit = createRateLimit(
-  15 * 60 * 1000, // 15 minutes
-  5, // 5 attempts per window
-  'Too many authentication attempts, please try again later'
-);
+// Disable strict auth rate limiting in development/test unless explicitly enabled
+const authRateLimit = disableRateLimit
+  ? noopMiddleware
+  : createRateLimit(
+      15 * 60 * 1000, // 15 minutes
+      5, // 5 attempts per window
+      'Too many authentication attempts, please try again later'
+    );
 
 /**
  * Moderate rate limiting for API endpoints
  */
-const apiRateLimit = createRateLimit(
-  15 * 60 * 1000, // 15 minutes
-  100, // 100 requests per window
-  'Too many API requests, please try again later'
-);
+// Disable general API rate limiting in development/test unless explicitly enabled
+const apiRateLimit = disableRateLimit
+  ? noopMiddleware
+  : createRateLimit(
+      15 * 60 * 1000, // 15 minutes
+      100, // 100 requests per window
+      'Too many API requests, please try again later'
+    );
 
 /**
  * Slow down for expensive operations
