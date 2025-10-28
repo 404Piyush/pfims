@@ -560,29 +560,56 @@ const Transactions = () => {
         )}
 
         {/* Pagination */}
-        {pagination && pagination.pages > 1 && (
+        {pagination && (
           <div className="px-6 py-4 border-t border-secondary-200">
             <div className="flex items-center justify-between">
+              {/* Summary */}
               <div className="text-sm text-secondary-700">
-                Showing {((currentPage - 1) * 10) + 1} to {Math.min(currentPage * 10, pagination.total)} of {pagination.total} results
+                {(() => {
+                  const itemsPerPage = pagination.itemsPerPage || 10;
+                  const totalItems = pagination.totalItems ?? pagination.total ?? 0;
+                  const startItem = totalItems === 0 ? 0 : ((currentPage - 1) * itemsPerPage) + 1;
+                  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+                  return `Showing ${startItem} to ${endItem} of ${totalItems} results`;
+                })()}
               </div>
+
+              {/* Controls */}
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => setCurrentPage(currentPage - 1)}
+                  onClick={() => setCurrentPage(1)}
                   disabled={currentPage === 1}
                   className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="First"
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1 || pagination.hasPrevPage === false}
+                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Previous"
                 >
                   Previous
                 </button>
                 <span className="text-sm text-secondary-700">
-                  Page {currentPage} of {pagination.pages}
+                  {`Page ${pagination.currentPage ?? currentPage} of ${pagination.totalPages ?? pagination.pages ?? 1}`}
                 </span>
                 <button
-                  onClick={() => setCurrentPage(currentPage + 1)}
-                  disabled={currentPage === pagination.pages}
+                  onClick={() => setCurrentPage(Math.min((pagination.totalPages ?? pagination.pages ?? currentPage), currentPage + 1))}
+                  disabled={(pagination.totalPages ?? pagination.pages ?? 1) <= currentPage || pagination.hasNextPage === false}
                   className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Next"
                 >
                   Next
+                </button>
+                <button
+                  onClick={() => setCurrentPage(pagination.totalPages ?? pagination.pages ?? 1)}
+                  disabled={(pagination.totalPages ?? pagination.pages ?? 1) <= currentPage}
+                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Last"
+                >
+                  Last
                 </button>
               </div>
             </div>
