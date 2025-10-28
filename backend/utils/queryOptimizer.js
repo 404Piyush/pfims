@@ -8,29 +8,34 @@ class QueryOptimizer {
    * Build optimized aggregation pipeline for transaction analytics
    */
   static buildTransactionAnalyticsPipeline(userId, filters = {}) {
-    const pipeline = [
-      {
-        $match: {
-          user: new mongoose.Types.ObjectId(userId),
-          ...filters
-        }
-      }
-    ];
+    // Only include supported filter fields in $match to avoid leaking arbitrary keys like startDate/endDate
+    const match = {
+      user: new mongoose.Types.ObjectId(userId)
+    };
 
-    // Add status filter only if explicitly provided
-    if (filters.status) {
-      pipeline[0].$match.status = filters.status;
-    }
+    if (filters.type) match.type = filters.type;
+    if (filters.category) match.category = filters.category;
+    if (filters.status) match.status = filters.status; // Only add status if explicitly provided
 
     // Add date filtering if provided
     if (filters.startDate || filters.endDate) {
       const dateMatch = {};
-      if (filters.startDate) dateMatch.$gte = new Date(filters.startDate);
-      if (filters.endDate) dateMatch.$lte = new Date(filters.endDate);
-      pipeline[0].$match.date = dateMatch;
+      if (filters.startDate) {
+        const start = new Date(filters.startDate);
+        // Normalize to start-of-day in local timezone
+        start.setHours(0, 0, 0, 0);
+        dateMatch.$gte = start;
+      }
+      if (filters.endDate) {
+        const end = new Date(filters.endDate);
+        // Ensure endDate includes end-of-day
+        end.setHours(23, 59, 59, 999);
+        dateMatch.$lte = end;
+      }
+      match.date = dateMatch;
     }
 
-    return pipeline;
+    return [ { $match: match } ];
   }
 
   /**
@@ -47,8 +52,18 @@ class QueryOptimizer {
     if (filters.status) query.status = filters.status; // Only add status if explicitly provided
     if (filters.startDate || filters.endDate) {
       query.date = {};
-      if (filters.startDate) query.date.$gte = new Date(filters.startDate);
-      if (filters.endDate) query.date.$lte = new Date(filters.endDate);
+      if (filters.startDate) {
+        const start = new Date(filters.startDate);
+        // Normalize to start-of-day in local timezone to avoid UTC cutoff issues
+        start.setHours(0, 0, 0, 0);
+        query.date.$gte = start;
+      }
+      if (filters.endDate) {
+        const end = new Date(filters.endDate);
+        // Normalize to end-of-day in local timezone
+        end.setHours(23, 59, 59, 999);
+        query.date.$lte = end;
+      }
     }
     if (filters.minAmount || filters.maxAmount) {
       query.amount = {};
@@ -301,6 +316,8 @@ class QueryOptimizer {
     if (startDate) {
       const start = new Date(startDate);
       if (!isNaN(start.getTime())) {
+        // Normalize to start-of-day in local timezone to avoid missing local midnight entries
+        start.setHours(0, 0, 0, 0);
         dateFilter.$gte = start;
       }
     }

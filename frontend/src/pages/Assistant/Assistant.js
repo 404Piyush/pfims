@@ -2,6 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import chatAPI from '../../services/chatAPI';
 import ReactMarkdown from 'react-markdown';
 import { PlusCircleIcon, PencilSquareIcon, TrashIcon, BugAntIcon, ArrowPathIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchCategories } from '../../store/slices/categorySlice';
+import api from '../../services/api';
+import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, subMonths } from 'date-fns';
 
 const INITIAL_GREETING = "Hi! I'm your PFIMS budget assistant. How can I help today?";
 
@@ -21,6 +25,15 @@ const Assistant = () => {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [renamingId, setRenamingId] = useState(null);
   const [renameText, setRenameText] = useState('');
+  // Context selection state
+  const dispatch = useDispatch();
+  const { categories } = useSelector((state) => state.categories || { categories: [] });
+  const [attachContext, setAttachContext] = useState(true);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [selectedMonthKey, setSelectedMonthKey] = useState(format(new Date(), 'yyyy-MM'));
+  const [selectedCategoryId, setSelectedCategoryId] = useState('all');
+  const [contextPreview, setContextPreview] = useState('');
+  const [contextText, setContextText] = useState('');
   const chatRef = useRef(null);
 
   useEffect(() => {
@@ -48,6 +61,125 @@ const Assistant = () => {
     load();
     return () => { mounted = false; };
   }, []);
+
+  // Fetch categories for dropdown
+  useEffect(() => {
+    dispatch(fetchCategories());
+  }, [dispatch]);
+
+  // Month options (last 12 months)
+  const monthsOptions = Array.from({ length: 12 }).map((_, i) => {
+    const d = subMonths(new Date(), i);
+    return { key: format(d, 'yyyy-MM'), label: format(d, 'MMM yyyy') };
+  });
+
+  const findCategoryName = (id) => {
+    if (!id || id === 'all') return 'All Categories';
+    const c = Array.isArray(categories) ? categories.find((x) => String(x.id) === String(id)) : null;
+    return c?.name || 'Unknown';
+  };
+
+  const getSelectedRangeDates = () => {
+    // Parse selectedMonthKey in format yyyy-MM
+    try {
+      const base = new Date(`${selectedMonthKey}-01T00:00:00`);
+      const s = startOfMonth(base);
+      const e = endOfMonth(base);
+      return { startDate: s, endDate: e };
+    } catch (err) {
+      const now = new Date();
+      return { startDate: startOfMonth(now), endDate: endOfMonth(now) };
+    }
+  };
+
+  const buildContext = async () => {
+    setContextLoading(true);
+    try {
+      const { startDate, endDate } = getSelectedRangeDates();
+      const startIso = startOfDay(startDate).toISOString();
+      const endIso = endOfDay(endDate).toISOString();
+
+      const txParams = { limit: 100, startDate: startIso, endDate: endIso };
+      if (selectedCategoryId !== 'all') txParams.category = selectedCategoryId;
+
+      const summaryParams = { period: 'custom', startDate: startIso, endDate: endIso };
+      if (selectedCategoryId !== 'all') summaryParams.category = selectedCategoryId;
+
+      const [summaryRes, txRes] = await Promise.all([
+        api.get('/transactions/analytics/summary', { params: summaryParams }),
+        api.get('/transactions', { params: txParams }),
+      ]);
+
+      const summary = summaryRes.data?.data || summaryRes.data || {};
+      const txs = txRes.data?.data || txRes.data?.transactions || txRes.data || [];
+
+      // Compute totals as fallback if summary not provided
+      const totals = {
+        income: Number(summary?.totals?.income ?? 0),
+        expense: Number(summary?.totals?.expense ?? 0),
+      };
+      // If a specific category is selected, recompute totals from filtered transactions
+      if (selectedCategoryId !== 'all' || !summary?.totals) {
+        txs.forEach((t) => {
+          const amt = Number(t?.amount ?? 0);
+          const type = String(t?.type || '').toLowerCase();
+          if (type === 'income') totals.income += amt;
+          else totals.expense += amt;
+        });
+      }
+      const net = totals.income - totals.expense;
+      const savingsRate = totals.income > 0 ? (100 * (totals.income - totals.expense) / totals.income) : 0;
+
+      // Top categories (expense side)
+      const topExpenses = (summary?.categories?.expense || [])
+        .slice(0, 5)
+        .map((c) => `${c.name}: ₹${Number(c.amount ?? 0).toFixed(2)}${c.percent != null ? ` (${Number(c.percent).toFixed(1)}%)` : ''}`);
+
+      // Largest transactions by absolute amount
+      const largestTxns = [...txs]
+        .sort((a, b) => Math.abs(Number(b.amount ?? 0)) - Math.abs(Number(a.amount ?? 0)))
+        .slice(0, 5)
+        .map((t) => {
+          const dt = t.date ? new Date(t.date) : null;
+          const dateStr = dt ? format(dt, 'dd MMM') : 'Unknown date';
+          const catName = t.categoryName || t.category?.name || 'Uncategorized';
+          const amt = Number(t.amount ?? 0).toFixed(2);
+          const tt = String(t.type || '').toLowerCase();
+          return `${dateStr} · ${catName} · ${tt === 'income' ? '+' : '-'}₹${amt}`;
+        });
+
+      const monthLabel = monthsOptions.find((m) => m.key === selectedMonthKey)?.label || format(new Date(), 'MMM yyyy');
+      const categoryLabel = findCategoryName(selectedCategoryId);
+
+      const preview = `${monthLabel} · ${categoryLabel} · ${txs.length} txns · Income ₹${totals.income.toFixed(2)} · Expense ₹${totals.expense.toFixed(2)} · Net ₹${net.toFixed(2)}`;
+      setContextPreview(preview);
+
+      const lines = [
+        `Period: ${monthLabel}`,
+        `Category filter: ${categoryLabel}`,
+        `Totals: Income ₹${totals.income.toFixed(2)}, Expenses ₹${totals.expense.toFixed(2)}, Net ₹${net.toFixed(2)}, Savings Rate ${savingsRate.toFixed(1)}%`,
+        `Transaction Count: ${txs.length}`,
+      ];
+      if (topExpenses.length) {
+        lines.push(`Top Expense Categories: ${topExpenses.join('; ')}`);
+      }
+      if (largestTxns.length) {
+        lines.push(`Largest Transactions: ${largestTxns.join(' | ')}`);
+      }
+      setContextText(lines.join('\n'));
+    } catch (err) {
+      setContextPreview('Context unavailable');
+      setContextText('');
+    } finally {
+      setContextLoading(false);
+    }
+  };
+
+  // Rebuild context when selection changes and toggle is enabled
+  useEffect(() => {
+    if (attachContext) buildContext();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonthKey, selectedCategoryId, attachContext]);
 
   const loadSessions = async () => {
     setLoadingSessions(true);
@@ -142,8 +274,10 @@ const Assistant = () => {
           return true;
         })
         .map(m => ({ role: m.role, content: m.content }));
+      // Inject financial context before sending (as part of the message text)
+      const messageToSend = attachContext && contextText ? `Context:\n${contextText}\n\nQuestion:\n${trimmed}` : trimmed;
 
-      const res = await chatAPI.sendMessage({ sessionId: selectedSessionId, message: trimmed, history, includeContext: !lite, debug, lite });
+      const res = await chatAPI.sendMessage({ sessionId: selectedSessionId, message: messageToSend, history, includeContext: !lite, debug, lite });
       const reply = res.data?.data?.reply || 'Sorry, I was unable to generate a response.';
       const meta = res.data?.data?.meta;
       const newSessionId = res.data?.data?.sessionId;
@@ -235,6 +369,42 @@ const Assistant = () => {
               {lastMeta.provider ? `${lastMeta.provider}` : 'atlas'}{lastMeta.model ? ` · ${lastMeta.model}` : ''}
             </span>
           )}
+          {/* Context selectors */}
+          <div className="flex items-center space-x-2">
+            <select
+              className="text-sm border border-secondary-300 rounded-md px-2 py-1"
+              value={selectedMonthKey}
+              onChange={(e) => setSelectedMonthKey(e.target.value)}
+              title="Month"
+            >
+              {monthsOptions.map((m) => (
+                <option key={m.key} value={m.key}>{m.label}</option>
+              ))}
+            </select>
+            <select
+              className="text-sm border border-secondary-300 rounded-md px-2 py-1"
+              value={selectedCategoryId}
+              onChange={(e) => setSelectedCategoryId(e.target.value)}
+              title="Category"
+            >
+              <option value="all">All Categories</option>
+              {(Array.isArray(categories) ? categories : []).map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <label className="flex items-center space-x-2 text-sm text-secondary-700">
+              <input
+                type="checkbox"
+                checked={attachContext}
+                onChange={(e) => setAttachContext(e.target.checked)}
+                className="rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span>Attach context</span>
+            </label>
+            <span className="text-xs bg-secondary-100 text-secondary-700 px-2 py-1 rounded-md border border-secondary-200 whitespace-nowrap" title="Context preview">
+              {contextLoading ? 'Loading context…' : (contextPreview || 'Context not ready')}
+            </span>
+          </div>
           <label className="flex items-center space-x-2 text-sm text-secondary-700">
             <input
               type="checkbox"
