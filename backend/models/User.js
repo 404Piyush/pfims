@@ -79,6 +79,22 @@ const userSchema = new mongoose.Schema({
   emailVerificationExpires: Date,
   passwordResetToken: String,
   passwordResetExpires: Date,
+  // OTP fields for multi-factor/login/verification and password reset via OTP
+  otpCodeHash: String,
+  otpPurpose: {
+    type: String,
+    enum: ['login', 'register', 'forgot_password'],
+  },
+  otpExpires: Date,
+  otpAttempts: {
+    type: Number,
+    default: 0
+  },
+  otpLastSentAt: Date,
+  otpResendCount: {
+    type: Number,
+    default: 0
+  },
   lastLogin: Date,
   isActive: {
     type: Boolean,
@@ -127,6 +143,12 @@ userSchema.methods.toJSON = function() {
   delete user.emailVerificationToken;
   delete user.passwordResetToken;
   delete user.passwordResetExpires;
+  delete user.otpCodeHash;
+  delete user.otpPurpose;
+  delete user.otpExpires;
+  delete user.otpAttempts;
+  delete user.otpLastSentAt;
+  delete user.otpResendCount;
   return user;
 };
 

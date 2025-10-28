@@ -6,6 +6,7 @@ const compression = require('compression');
 const mongoSanitize = require('express-mongo-sanitize');
 const { connectDB, checkConnection } = require('./config/database');
 require('dotenv').config();
+const { startReportScheduler } = require('./services/reportScheduler');
 
 const app = express();
 
@@ -116,4 +117,10 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV}`);
+  // Optionally start weekly/monthly email report scheduler
+  try {
+    startReportScheduler();
+  } catch (e) {
+    console.warn('Report scheduler not started:', e?.message || e);
+  }
 });

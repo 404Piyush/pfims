@@ -1,5 +1,7 @@
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+// Ensure fetch is available across Node versions
+const fetch = global.fetch || require('node-fetch');
 
 class EmailService {
   constructor() {
@@ -239,6 +241,11 @@ class EmailService {
       'Reset Your Password - PFIMS',
       html
     );
+  }
+
+  // Backward-compatible alias (some routes call sendPasswordResetEmail)
+  async sendPasswordResetEmail(user, resetToken) {
+    return await this.sendPasswordReset(user, resetToken);
   }
 
   async sendBudgetAlertEmail(user, budget, category, alertType) {
