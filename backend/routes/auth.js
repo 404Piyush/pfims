@@ -17,6 +17,22 @@ const generateToken = (userId) => {
   });
 };
 
+// OTP helpers
+const OTP_EXP_MINUTES_DEFAULT = parseInt(process.env.OTP_EXP_MINUTES || '10');
+const OTP_MAX_ATTEMPTS = parseInt(process.env.OTP_MAX_ATTEMPTS || '5');
+const OTP_RESEND_INTERVAL_MS = parseInt(process.env.OTP_RESEND_INTERVAL_MS || '60000');
+
+const generateOtpCode = (length = 6) => {
+  const digits = '0123456789';
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += digits[Math.floor(Math.random() * digits.length)];
+  }
+  return code;
+};
+
+const hashOtpCode = (code) => crypto.createHash('sha256').update(String(code)).digest('hex');
+
 // @route   POST /api/auth/register
 // @desc    Register a new user
 // @access  Public
@@ -92,6 +108,21 @@ router.post('/register', [
     } catch (emailError) {
       console.error('Email service error:', emailError);
       // Continue with registration success
+    }
+
+    // Additionally send OTP for new account verification (alternate to link)
+    try {
+      const otpCode = generateOtpCode(6);
+      user.otpCodeHash = hashOtpCode(otpCode);
+      user.otpPurpose = 'register';
+      user.otpExpires = new Date(Date.now() + OTP_EXP_MINUTES_DEFAULT * 60 * 1000);
+      user.otpAttempts = 0;
+      user.otpLastSentAt = new Date();
+      user.otpResendCount = (user.otpResendCount || 0) + 1;
+      await user.save();
+      await emailService.sendOtpEmail(user.email, otpCode, OTP_EXP_MINUTES_DEFAULT);
+    } catch (otpError) {
+      console.error('Registration OTP send error:', otpError?.message || otpError);
     }
 
     res.status(201).json({
@@ -197,6 +228,235 @@ router.post('/login', [
     res.status(500).json({
       message: 'Server error during login'
     });
+  }
+});
+
+// @route   POST /api/auth/otp/send
+// @desc    Send OTP for login, registration verification, or forgot password
+// @access  Public (login requires password verification)
+router.post('/otp/send', [
+  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+  body('purpose').isIn(['login', 'register', 'forgot_password']).withMessage('Invalid OTP purpose'),
+  body('password').optional().isString().withMessage('Password must be a string')
+], sensitiveOperationLimit(5 * 60 * 1000, 5), async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: 'Validation failed', errors: errors.array() });
+    }
+
+    const { email, purpose, password } = req.body;
+    const user = await User.findOne({ email }).select('+password');
+
+    if (!user) {
+      // Do not reveal existence of account
+      return res.json({ message: 'If an account exists, an OTP has been sent.' });
+    }
+
+    if (!user.isActive) {
+      return res.status(401).json({ message: 'Account is deactivated. Please contact support.' });
+    }
+
+    // Rate-limit resend by interval
+    if (user.otpLastSentAt && Date.now() - new Date(user.otpLastSentAt).getTime() < OTP_RESEND_INTERVAL_MS) {
+      const waitMs = OTP_RESEND_INTERVAL_MS - (Date.now() - new Date(user.otpLastSentAt).getTime());
+      return res.status(429).json({ message: `Please wait ${Math.ceil(waitMs / 1000)}s before requesting another OTP.` });
+    }
+
+    if (purpose === 'login') {
+      // Verify password before sending OTP as second factor
+      const isMatch = await user.comparePassword(password || '');
+      if (!isMatch) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+      if (!user.isEmailVerified) {
+        return res.status(401).json({ message: 'Please verify your email before logging in.', requiresEmailVerification: true });
+      }
+    } else if (purpose === 'register') {
+      if (user.isEmailVerified) {
+        return res.status(400).json({ message: 'Email is already verified' });
+      }
+    } else if (purpose === 'forgot_password') {
+      // No extra checks – keep behavior generic
+    }
+
+    const otpCode = generateOtpCode(6);
+    user.otpCodeHash = hashOtpCode(otpCode);
+    user.otpPurpose = purpose;
+    user.otpExpires = new Date(Date.now() + OTP_EXP_MINUTES_DEFAULT * 60 * 1000);
+    user.otpAttempts = 0;
+    user.otpLastSentAt = new Date();
+    user.otpResendCount = (user.otpResendCount || 0) + 1;
+    await user.save();
+
+    const result = await emailService.sendOtpEmail(user.email, otpCode, OTP_EXP_MINUTES_DEFAULT);
+    if (!result.success) {
+      return res.status(500).json({ message: 'Failed to send OTP', error: result.error });
+    }
+
+    return res.json({ message: 'OTP has been sent. Please check your email.', purpose });
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({ message: 'Server error sending OTP' });
+  }
+});
+
+// @route   POST /api/auth/otp/verify
+// @desc    Verify OTP for login, registration, or forgot password
+// @access  Public
+router.post('/otp/verify', [
+  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+  body('code').isLength({ min: 4, max: 8 }).withMessage('Invalid OTP code'),
+  body('purpose').isIn(['login', 'register', 'forgot_password']).withMessage('Invalid OTP purpose')
+], sensitiveOperationLimit(5 * 60 * 1000, 10), async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: 'Validation failed', errors: errors.array() });
+    }
+
+    const { email, code, purpose } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired OTP' });
+    }
+
+    if (!user.otpCodeHash || !user.otpPurpose || !user.otpExpires) {
+      return res.status(400).json({ message: 'No active OTP. Please request a new code.' });
+    }
+
+    if (user.otpPurpose !== purpose) {
+      return res.status(400).json({ message: 'OTP purpose mismatch. Please request a new code.' });
+    }
+
+    if (new Date(user.otpExpires).getTime() < Date.now()) {
+      return res.status(400).json({ message: 'OTP has expired. Please request a new code.' });
+    }
+
+    if ((user.otpAttempts || 0) >= OTP_MAX_ATTEMPTS) {
+      return res.status(429).json({ message: 'Too many incorrect attempts. Please request a new OTP.' });
+    }
+
+    const hashed = hashOtpCode(code);
+    const isValid = hashed === user.otpCodeHash;
+    if (!isValid) {
+      user.otpAttempts = (user.otpAttempts || 0) + 1;
+      await user.save();
+      return res.status(400).json({ message: 'Incorrect OTP' });
+    }
+
+    // Success: clear OTP fields
+    user.otpCodeHash = undefined;
+    user.otpPurpose = undefined;
+    user.otpExpires = undefined;
+    user.otpAttempts = 0;
+    user.otpLastSentAt = undefined;
+    user.otpResendCount = 0;
+
+    if (purpose === 'login') {
+      // Complete login
+      const token = generateToken(user._id);
+      user.lastLogin = new Date();
+      await user.save();
+      return res.json({ message: 'Login successful', token, user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        currency: user.currency,
+        timezone: user.timezone,
+        isEmailVerified: user.isEmailVerified,
+        lastLogin: user.lastLogin
+      }});
+    }
+
+    if (purpose === 'register') {
+      // Verify email via OTP
+      user.isEmailVerified = true;
+      user.emailVerificationToken = undefined;
+      user.emailVerificationExpires = undefined;
+      await user.save();
+
+      const token = generateToken(user._id);
+      user.lastLogin = new Date();
+      await user.save();
+      return res.json({ message: 'Email verified successfully', token, user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        currency: user.currency,
+        timezone: user.timezone,
+        isEmailVerified: user.isEmailVerified
+      }});
+    }
+
+    if (purpose === 'forgot_password') {
+      await user.save();
+      return res.json({ message: 'OTP verified. You may now reset your password using this code.', otpVerified: true });
+    }
+
+    return res.json({ message: 'OTP verified' });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ message: 'Server error verifying OTP' });
+  }
+});
+
+// @route   POST /api/auth/reset-password-by-otp
+// @desc    Reset password using OTP (alternative to email token flow)
+// @access  Public
+router.post('/reset-password-by-otp', [
+  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+  body('code').isLength({ min: 4, max: 8 }).withMessage('Invalid OTP code'),
+  body('newPassword')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .withMessage('Password must contain at least one uppercase letter, one lowercase letter, and one number')
+], sensitiveOperationLimit(15 * 60 * 1000, 3), async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: 'Validation failed', errors: errors.array() });
+    }
+
+    const { email, code, newPassword } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid request' });
+    }
+
+    if (user.otpPurpose !== 'forgot_password' || !user.otpCodeHash || new Date(user.otpExpires).getTime() < Date.now()) {
+      return res.status(400).json({ message: 'Invalid or expired OTP for password reset' });
+    }
+
+    if ((user.otpAttempts || 0) >= OTP_MAX_ATTEMPTS) {
+      return res.status(429).json({ message: 'Too many incorrect attempts. Please request a new OTP.' });
+    }
+
+    const hashed = hashOtpCode(code);
+    const isValid = hashed === user.otpCodeHash;
+    if (!isValid) {
+      user.otpAttempts = (user.otpAttempts || 0) + 1;
+      await user.save();
+      return res.status(400).json({ message: 'Incorrect OTP' });
+    }
+
+    // Update password and clear OTP
+    user.password = newPassword;
+    user.otpCodeHash = undefined;
+    user.otpPurpose = undefined;
+    user.otpExpires = undefined;
+    user.otpAttempts = 0;
+    user.otpLastSentAt = undefined;
+    user.otpResendCount = 0;
+    await user.save();
+
+    return res.json({ message: 'Password reset successful' });
+  } catch (error) {
+    console.error('Reset password by OTP error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
