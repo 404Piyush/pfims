@@ -36,7 +36,32 @@ router.put('/profile', [
   body('timezone')
     .optional()
     .isLength({ min: 1, max: 50 })
-    .withMessage('Invalid timezone')
+    .withMessage('Invalid timezone'),
+  // Notifications preferences
+  body('notifications')
+    .optional()
+    .isObject()
+    .withMessage('Notifications must be an object'),
+  body('notifications.email')
+    .optional()
+    .isBoolean()
+    .withMessage('notifications.email must be a boolean'),
+  body('notifications.transactionAlerts')
+    .optional()
+    .isBoolean()
+    .withMessage('notifications.transactionAlerts must be a boolean'),
+  body('notifications.budgetAlerts')
+    .optional()
+    .isBoolean()
+    .withMessage('notifications.budgetAlerts must be a boolean'),
+  body('notifications.weeklyReports')
+    .optional()
+    .isBoolean()
+    .withMessage('notifications.weeklyReports must be a boolean'),
+  body('notifications.monthlyReports')
+    .optional()
+    .isBoolean()
+    .withMessage('notifications.monthlyReports must be a boolean')
 ], auth, async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -53,7 +78,8 @@ router.put('/profile', [
       'phone', 
       'dateOfBirth', 
       'currency', 
-      'timezone'
+      'timezone',
+      'notifications'
     ];
     
     const updates = {};
@@ -80,6 +106,7 @@ router.put('/profile', [
         dateOfBirth: user.dateOfBirth,
         currency: user.currency,
         timezone: user.timezone,
+        notifications: user.notifications,
         isEmailVerified: user.isEmailVerified,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt

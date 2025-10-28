@@ -9,8 +9,12 @@ const chatAPI = {
   deleteSession: (id) => api.delete(`/chatbot/sessions/${id}`),
 
   // Messaging
-  sendMessage: ({ sessionId, message, history = [], includeContext = true, debug = false, lite = false }) =>
-    api.post('/chatbot/message', { sessionId, message, history, includeContext, debug, lite })
+  sendMessage: ({ sessionId, message, history = [], includeContext = true, debug = false, lite = false }) => {
+    const payload = { message, history, includeContext, debug, lite };
+    // Only include sessionId if it is a valid non-empty value
+    if (sessionId) payload.sessionId = sessionId;
+    return api.post('/chatbot/message', payload);
+  }
 };
 
 export default chatAPI;

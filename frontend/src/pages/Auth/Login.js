@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import { login } from '../../store/slices/authSlice';
+import { login, resendVerificationEmail } from '../../store/slices/authSlice';
 import { InlineSpinner } from '../../components/UI/LoadingSpinner';
 
 // Validation schema
@@ -22,6 +22,9 @@ const loginSchema = yup.object({
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [requiresVerification, setRequiresVerification] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -34,6 +37,7 @@ const Login = () => {
   } = useForm({
     resolver: yupResolver(loginSchema),
   });
+  const [emailValue, setEmailValue] = useState('');
 
   const onSubmit = async (data) => {
     try {
@@ -42,9 +46,34 @@ const Login = () => {
       const from = location.state?.from?.pathname || '/';
       navigate(from, { replace: true });
     } catch (error) {
-      // Error is handled by the slice and displayed via toast
+      // Detect unverified email case and show resend option
+      const msg = typeof error === 'string' ? error : (error?.message || '');
+      if (msg.toLowerCase().includes('verify your email')) {
+        setRequiresVerification(true);
+      }
     }
   };
+
+  const handleResendVerification = async () => {
+    if (resendCooldown > 0 || !emailValue) return;
+    setResendLoading(true);
+    try {
+      await dispatch(resendVerificationEmail(emailValue)).unwrap();
+      setResendCooldown(60);
+    } catch (e) {
+      // slice handles toast
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    let interval;
+    if (resendCooldown > 0) {
+      interval = setInterval(() => setResendCooldown((v) => v - 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-secondary-100 py-12 px-4 sm:px-6 lg:px-8">
@@ -81,6 +110,7 @@ const Login = () => {
                 className={`input ${errors.email ? 'input-error' : ''}`}
                 placeholder="Enter your email"
                 autoComplete="email"
+                onChange={(e) => setEmailValue(e.target.value)}
               />
               {errors.email && (
                 <p className="form-error">{errors.email.message}</p>
@@ -157,6 +187,31 @@ const Login = () => {
                 'Sign in'
               )}
             </button>
+
+            {requiresVerification && (
+              <div className="mt-4">
+                <p className="text-sm text-secondary-700 mb-2">
+                  Your email is not verified. Click below to resend the verification email.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resendLoading || resendCooldown > 0 || !emailValue}
+                  className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+                >
+                  {resendLoading ? (
+                    <>
+                      <InlineSpinner size="sm" color="white" className="mr-2" />
+                      Sending...
+                    </>
+                  ) : resendCooldown > 0 ? (
+                    `Resend in ${resendCooldown}s`
+                  ) : (
+                    'Resend verification email'
+                  )}
+                </button>
+              </div>
+            )}
 
             {/* Error Message */}
             {error && (

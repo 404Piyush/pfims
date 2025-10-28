@@ -18,6 +18,7 @@ const VerifyEmail = () => {
   const [verificationStatus, setVerificationStatus] = useState('verifying'); // verifying, success, error
   const [resendLoading, setResendLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendEmail, setResendEmail] = useState('');
 
   const token = searchParams.get('token');
 
@@ -39,6 +40,12 @@ const VerifyEmail = () => {
     return () => clearInterval(interval);
   }, [resendCooldown]);
 
+  useEffect(() => {
+    if (user?.email && !resendEmail) {
+      setResendEmail(user.email);
+    }
+  }, [user, resendEmail]);
+
   const handleVerification = async () => {
     try {
       await dispatch(verifyEmail(token)).unwrap();
@@ -56,7 +63,10 @@ const VerifyEmail = () => {
     
     setResendLoading(true);
     try {
-      await dispatch(resendVerificationEmail()).unwrap();
+      if (!resendEmail) {
+        throw new Error('Please enter your email');
+      }
+      await dispatch(resendVerificationEmail(resendEmail)).unwrap();
       setResendCooldown(60); // 60 seconds cooldown
     } catch (error) {
       // Error is handled by the slice
@@ -129,7 +139,19 @@ const VerifyEmail = () => {
           </p>
           
           <div className="space-y-4">
-            {user && !user.emailVerified && (
+            <div>
+              <label htmlFor="resend-email" className="form-label">Email address</label>
+              <input
+                id="resend-email"
+                type="email"
+                value={resendEmail}
+                onChange={(e) => setResendEmail(e.target.value)}
+                placeholder="Enter your email"
+                className="input"
+                autoComplete="email"
+              />
+            </div>
+            {(!user || !user.isEmailVerified) && (
               <button
                 onClick={handleResendEmail}
                 disabled={resendLoading || resendCooldown > 0}

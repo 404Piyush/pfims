@@ -32,8 +32,8 @@ const authAPI = {
     return api.post('/auth/verify-email', { token });
   },
 
-  resendVerification: () => {
-    return api.post('/auth/resend-verification');
+  resendVerificationEmail: (email) => {
+    return api.post('/auth/resend-verification', { email });
   },
 
   // Profile management
@@ -46,11 +46,13 @@ const authAPI = {
   },
 
   changeEmail: (emailData) => {
-    return api.post('/users/change-email', emailData);
+    // Backend expects PUT /api/users/email with { email, password }
+    return api.put('/users/email', emailData);
   },
 
   deactivateAccount: (confirmationData) => {
-    return api.post('/users/deactivate', confirmationData);
+    // Backend exposes DELETE /api/users/account; axios supports body via config.data
+    return api.delete('/users/account', { data: confirmationData });
   },
 
   // User statistics

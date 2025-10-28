@@ -19,6 +19,8 @@ import {
 } from '@heroicons/react/24/outline';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
 import Modal from '../../components/UI/Modal';
+import authAPI from '../../services/authAPI';
+import api from '../../services/api';
 
 const Settings = () => {
   const dispatch = useDispatch();
@@ -65,6 +67,8 @@ const Settings = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
 
   // Handle setting changes
   const handleSettingChange = (category, key, value) => {
@@ -85,8 +89,40 @@ const Settings = () => {
   // Save settings
   const handleSaveSettings = async () => {
     try {
-      // Here you would dispatch an action to save settings
-      console.log('Saving settings:', settings);
+      // Persist server-backed preferences
+      const payload = {
+        currency: settings.currency,
+        timezone: settings.timezone,
+        notifications: {
+          email: settings.emailNotifications,
+          transactionAlerts: settings.transactionAlerts,
+          budgetAlerts: settings.budgetAlerts,
+          weeklyReports: settings.weeklyReports,
+          monthlyReports: settings.monthlyReports,
+        },
+      };
+      await authAPI.updateProfile(payload);
+
+      // Persist client-only preferences locally
+      const clientPrefs = {
+        language: settings.language,
+        dateFormat: settings.dateFormat,
+        theme: settings.theme,
+        compactMode: settings.compactMode,
+        showAnimations: settings.showAnimations,
+        profileVisibility: settings.profileVisibility,
+        dataSharing: settings.dataSharing,
+        analyticsTracking: settings.analyticsTracking,
+        pushNotifications: settings.pushNotifications,
+        twoFactorAuth: settings.twoFactorAuth,
+        sessionTimeout: settings.sessionTimeout,
+        loginAlerts: settings.loginAlerts,
+        autoBackup: settings.autoBackup,
+        dataRetention: settings.dataRetention,
+        exportFormat: settings.exportFormat,
+      };
+      localStorage.setItem('pfims_prefs', JSON.stringify(clientPrefs));
+
       alert('Settings saved successfully!');
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -123,18 +159,101 @@ const Settings = () => {
   };
 
   // Export data
-  const handleExportData = () => {
-    console.log('Exporting data in format:', settings.exportFormat);
-    setShowExportModal(false);
-    alert('Data export initiated. You will receive an email when ready.');
+  const handleExportData = async () => {
+    try {
+      const format = ['csv', 'json'].includes(settings.exportFormat)
+        ? settings.exportFormat
+        : 'json';
+      const res = await api.get('/reports/export', {
+        params: { format, type: 'all' },
+      });
+
+      const filename = `pfims-export-${new Date().toISOString().slice(0, 10)}.${format}`;
+      const isCsv = format === 'csv';
+      const content = isCsv ? res.data : JSON.stringify(res.data, null, 2);
+      const blob = new Blob([content], {
+        type: isCsv ? 'text/csv;charset=utf-8' : 'application/json',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      setShowExportModal(false);
+      alert('Data export completed.');
+    } catch (error) {
+      console.error('Failed to export data:', error);
+      alert('Failed to export data');
+    }
   };
 
   // Delete account
-  const handleDeleteAccount = () => {
-    console.log('Account deletion requested');
-    setShowDeleteModal(false);
-    alert('Account deletion request submitted. You will receive a confirmation email.');
+  const handleDeleteAccount = async () => {
+    try {
+      if (deleteConfirmation !== 'DELETE') {
+        alert('Please type DELETE to confirm.');
+        return;
+      }
+      if (!deletePassword) {
+        alert('Please enter your password to confirm.');
+        return;
+      }
+
+      await authAPI.deactivateAccount({
+        password: deletePassword,
+        confirmation: 'DELETE',
+      });
+
+      setShowDeleteModal(false);
+      setDeleteConfirmation('');
+      setDeletePassword('');
+      alert('Your account has been deactivated.');
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Account deactivation failed:', error);
+      alert(error?.response?.data?.message || 'Failed to deactivate account');
+    }
   };
+
+  // Load user profile into settings
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const res = await authAPI.getProfile();
+        const u = res?.data?.user || {};
+        setSettings((prev) => ({
+          ...prev,
+          timezone: u.timezone || prev.timezone,
+          currency: u.currency || prev.currency,
+          emailNotifications:
+            u.notifications?.email ?? prev.emailNotifications,
+          transactionAlerts:
+            u.notifications?.transactionAlerts ?? prev.transactionAlerts,
+          budgetAlerts: u.notifications?.budgetAlerts ?? prev.budgetAlerts,
+          weeklyReports:
+            u.notifications?.weeklyReports ?? prev.weeklyReports,
+          monthlyReports:
+            u.notifications?.monthlyReports ?? prev.monthlyReports,
+        }));
+
+        // Load client-only prefs
+        const raw = localStorage.getItem('pfims_prefs');
+        if (raw) {
+          const clientPrefs = JSON.parse(raw);
+          setSettings((prev) => ({ ...prev, ...clientPrefs }));
+        }
+      } catch (e) {
+        // Ignore errors; user may not be logged in yet
+        console.warn('Failed to load profile for settings:', e?.message || e);
+      }
+    };
+    loadProfile();
+  }, []);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -614,7 +733,22 @@ const Settings = () => {
             type="text"
             placeholder="Type DELETE to confirm"
             className="input"
+            value={deleteConfirmation}
+            onChange={(e) => setDeleteConfirmation(e.target.value)}
           />
+
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">
+              Enter Password
+            </label>
+            <input
+              type="password"
+              placeholder="Your account password"
+              className="input"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+            />
+          </div>
           
           <div className="flex justify-end space-x-3">
             <button
