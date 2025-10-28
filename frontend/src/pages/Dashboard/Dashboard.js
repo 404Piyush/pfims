@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { fetchTransactions } from '../../store/slices/transactionSlice';
+import api from '../../services/api';
 import {
   PlusIcon,
   ArrowTrendingUpIcon,
@@ -103,21 +104,111 @@ const Dashboard = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('month');
 
   useEffect(() => {
-    // Fetch real transaction data
+    // Fetch dashboard data for current and previous month, and overall balance
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        // Get date range for current month
         const now = new Date();
-        const startDate = startOfMonth(now);
-        const endDate = endOfMonth(now);
-        
-        // Fetch all transactions for current month
-        await dispatch(fetchTransactions({ 
-          dateFrom: format(startDate, 'yyyy-MM-dd'),
-          dateTo: format(endDate, 'yyyy-MM-dd'),
-          sortBy: 'date', 
-          sortOrder: 'desc' 
+        const currentStart = startOfMonth(now);
+        const currentEnd = endOfMonth(now);
+
+        const prev = subMonths(now, 1);
+        const prevStart = startOfMonth(prev);
+        const prevEnd = endOfMonth(prev);
+
+        // Fetch recent transactions for the current month for the list (uses slice store)
+        await dispatch(fetchTransactions({
+          startDate: format(currentStart, 'yyyy-MM-dd'),
+          endDate: format(currentEnd, 'yyyy-MM-dd'),
+          sortBy: 'date',
+          sortOrder: 'desc',
+          limit: 100
+        }));
+
+        // Fetch summary analytics for current and previous month
+        const [currentSummaryRes, previousSummaryRes, overallSummaryRes] = await Promise.all([
+          api.get('/transactions/analytics/summary', {
+            params: {
+              period: 'custom',
+              startDate: format(currentStart, 'yyyy-MM-dd'),
+              endDate: format(currentEnd, 'yyyy-MM-dd')
+            }
+          }),
+          api.get('/transactions/analytics/summary', {
+            params: {
+              period: 'custom',
+              startDate: format(prevStart, 'yyyy-MM-dd'),
+              endDate: format(prevEnd, 'yyyy-MM-dd')
+            }
+          }),
+          // Overall balance to date (simple approximation using all recorded transactions)
+          api.get('/transactions/analytics/summary', {
+            params: {
+              period: 'year' // Use YTD as a practical overall balance proxy
+            }
+          })
+        ]);
+
+        const currentSummary = currentSummaryRes?.data?.data || {};
+        const previousSummary = previousSummaryRes?.data?.data || {};
+        const overallSummary = overallSummaryRes?.data?.data || {};
+
+        const monthlyIncome = Number(currentSummary.totalIncome || 0);
+        const monthlyExpenses = Number(currentSummary.totalExpense || 0);
+        const monthlyNet = Number(currentSummary.netIncome || 0);
+
+        const previousMonthIncome = Number(previousSummary.totalIncome || 0);
+        const previousMonthExpenses = Number(previousSummary.totalExpense || 0);
+        const previousMonthNet = Number(previousSummary.netIncome || 0);
+
+        // Percentage changes where possible
+        const incomePct = previousMonthIncome > 0
+          ? ((monthlyIncome - previousMonthIncome) / previousMonthIncome) * 100
+          : null;
+        const expensePct = previousMonthExpenses > 0
+          ? ((monthlyExpenses - previousMonthExpenses) / previousMonthExpenses) * 100
+          : null;
+        const netPct = previousMonthNet !== 0
+          ? ((monthlyNet - previousMonthNet) / Math.abs(previousMonthNet)) * 100
+          : null;
+
+        // Amount differences (used when percent is not meaningful)
+        const incomeDiff = monthlyIncome - previousMonthIncome;
+        const expenseDiff = monthlyExpenses - previousMonthExpenses;
+        const netDiff = monthlyNet - previousMonthNet;
+
+        // Helper to format change text
+        const formatChangeText = (pct, diff, prevVal) => {
+          if (pct !== null) {
+            const sign = pct >= 0 ? '+' : '';
+            return `${sign}${pct.toFixed(1)}% from last month`;
+          }
+          // When previous month has no data, show last month's value and absolute change
+          const diffSign = diff >= 0 ? '+' : '';
+          return `Last month: ${formatCurrency(prevVal)} (${diffSign}${formatCurrency(Math.abs(diff))} difference)`;
+        };
+
+        setDashboardData(prev => ({
+          ...prev,
+          summary: {
+            ...prev.summary,
+            monthlyIncome,
+            monthlyExpenses,
+            monthlyNet,
+            savingsRate: monthlyIncome > 0 ? ((monthlyNet / monthlyIncome) * 100) : 0,
+            // Overall balance proxy: year-to-date net income
+            totalBalance: Number(overallSummary.netIncome || 0)
+          },
+          changes: {
+            income: incomePct,
+            incomeText: formatChangeText(incomePct, incomeDiff, previousMonthIncome),
+            expenses: expensePct,
+            expensesText: formatChangeText(expensePct, expenseDiff, previousMonthExpenses),
+            net: netPct,
+            netText: formatChangeText(netPct, netDiff, previousMonthNet),
+            balance: netPct, // use net trend for balance
+            balanceText: formatChangeText(netPct, netDiff, previousMonthNet)
+          }
         }));
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -129,71 +220,11 @@ const Dashboard = () => {
     fetchDashboardData();
   }, [selectedPeriod, dispatch]);
 
-  // Update dashboard data when transactions change
+  // Update recent transactions list when store changes
   useEffect(() => {
     if (transactions && transactions.length > 0) {
-      // Calculate real financial metrics from transactions
-      const currentMonthTransactions = transactions.filter(transaction => {
-        const transactionDate = new Date(transaction.date);
-        const now = new Date();
-        return transactionDate.getMonth() === now.getMonth() && 
-               transactionDate.getFullYear() === now.getFullYear();
-      });
-
-      // Calculate previous month for comparison
-      const previousMonth = new Date();
-      previousMonth.setMonth(previousMonth.getMonth() - 1);
-      
-      const previousMonthTransactions = transactions.filter(transaction => {
-        const transactionDate = new Date(transaction.date);
-        return transactionDate.getMonth() === previousMonth.getMonth() && 
-               transactionDate.getFullYear() === previousMonth.getFullYear();
-      });
-
-      const monthlyIncome = currentMonthTransactions
-        .filter(t => t.type === 'income')
-        .reduce((sum, t) => sum + t.amount, 0);
-      
-      const monthlyExpenses = currentMonthTransactions
-        .filter(t => t.type === 'expense')
-        .reduce((sum, t) => sum + t.amount, 0);
-      
-      const previousMonthIncome = previousMonthTransactions
-        .filter(t => t.type === 'income')
-        .reduce((sum, t) => sum + t.amount, 0);
-      
-      const previousMonthExpenses = previousMonthTransactions
-        .filter(t => t.type === 'expense')
-        .reduce((sum, t) => sum + t.amount, 0);
-      
-      const monthlyNet = monthlyIncome - monthlyExpenses;
-      const previousMonthNet = previousMonthIncome - previousMonthExpenses;
-      const savingsRate = monthlyIncome > 0 ? ((monthlyNet / monthlyIncome) * 100) : 0;
-
-      // Calculate percentage changes
-      const incomeChange = previousMonthIncome > 0 ? 
-        (((monthlyIncome - previousMonthIncome) / previousMonthIncome) * 100) : 0;
-      const expenseChange = previousMonthExpenses > 0 ? 
-        (((monthlyExpenses - previousMonthExpenses) / previousMonthExpenses) * 100) : 0;
-      const netChange = previousMonthNet !== 0 ? 
-        (((monthlyNet - previousMonthNet) / Math.abs(previousMonthNet)) * 100) : 0;
-
       setDashboardData(prev => ({
         ...prev,
-        summary: {
-          ...prev.summary,
-          monthlyIncome,
-          monthlyExpenses,
-          monthlyNet,
-          savingsRate,
-          totalBalance: prev.summary.totalBalance + monthlyNet // Simple approximation
-        },
-        changes: {
-          income: incomeChange,
-          expenses: expenseChange,
-          net: netChange,
-          balance: netChange // Use net change for balance change approximation
-        },
         recentTransactions: transactions.slice(0, 5).map(transaction => ({
           id: transaction._id,
           description: transaction.title || transaction.description,
@@ -280,44 +311,44 @@ const Dashboard = () => {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Total Balance"
+          title="Total Balance (YTD)"
           value={formatCurrency(dashboardData.summary.totalBalance)}
-          change={dashboardData.changes?.balance ? 
-            `${dashboardData.changes.balance >= 0 ? '+' : ''}${dashboardData.changes.balance.toFixed(1)}% from last month` : 
-            'No previous data'}
+          change={dashboardData.changes?.balanceText}
           icon={BanknotesIcon}
           color="primary"
-          trend={dashboardData.changes?.balance >= 0 ? "up" : "down"}
+          trend={dashboardData.changes?.balance !== null && dashboardData.changes?.balance !== undefined
+            ? (dashboardData.changes.balance >= 0 ? 'up' : 'down')
+            : 'neutral'}
         />
         <StatCard
           title="Monthly Income"
           value={formatCurrency(dashboardData.summary.monthlyIncome)}
-          change={dashboardData.changes?.income ? 
-            `${dashboardData.changes.income >= 0 ? '+' : ''}${dashboardData.changes.income.toFixed(1)}% from last month` : 
-            'No previous data'}
+          change={dashboardData.changes?.incomeText}
           icon={ArrowTrendingUpIcon}
           color="success"
-          trend={dashboardData.changes?.income >= 0 ? "up" : "down"}
+          trend={dashboardData.changes?.income !== null && dashboardData.changes?.income !== undefined
+            ? (dashboardData.changes.income >= 0 ? 'up' : 'down')
+            : 'neutral'}
         />
         <StatCard
           title="Monthly Expenses"
           value={formatCurrency(dashboardData.summary.monthlyExpenses)}
-          change={dashboardData.changes?.expenses ? 
-            `${dashboardData.changes.expenses >= 0 ? '+' : ''}${dashboardData.changes.expenses.toFixed(1)}% from last month` : 
-            'No previous data'}
+          change={dashboardData.changes?.expensesText}
           icon={ArrowTrendingDownIcon}
           color="danger"
-          trend={dashboardData.changes?.expenses >= 0 ? "up" : "down"}
+          trend={dashboardData.changes?.expenses !== null && dashboardData.changes?.expenses !== undefined
+            ? (dashboardData.changes.expenses >= 0 ? 'up' : 'down')
+            : 'neutral'}
         />
         <StatCard
           title="Net Income"
           value={formatCurrency(dashboardData.summary.monthlyNet)}
-          change={dashboardData.changes?.net ? 
-            `${dashboardData.changes.net >= 0 ? '+' : ''}${dashboardData.changes.net.toFixed(1)}% from last month` : 
-            'No previous data'}
+          change={dashboardData.changes?.netText}
           icon={ChartBarIcon}
           color="primary"
-          trend={dashboardData.changes?.net >= 0 ? "up" : "down"}
+          trend={dashboardData.changes?.net !== null && dashboardData.changes?.net !== undefined
+            ? (dashboardData.changes.net >= 0 ? 'up' : 'down')
+            : 'neutral'}
         />
       </div>
 
