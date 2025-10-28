@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { format, startOfMonth, endOfMonth, subMonths, parseISO, startOfYear, endOfYear } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, parseISO, startOfYear, endOfYear, startOfDay, endOfDay } from 'date-fns';
 import {
   ChartBarIcon,
   CurrencyDollarIcon,
@@ -11,14 +11,14 @@ import {
   FunnelIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
-import { fetchTransactions } from '../../store/slices/transactionSlice';
+import { fetchTransactions, fetchAnalyticsSummary } from '../../store/slices/transactionSlice';
 import { fetchCategories } from '../../store/slices/categorySlice';
 import { fetchBudgets } from '../../store/slices/budgetSlice';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
 
 const Reports = () => {
   const dispatch = useDispatch();
-  const { transactions, loading } = useSelector((state) => state.transactions);
+  const { transactions, loading, analyticsSummary, analyticsError, listSummary } = useSelector((state) => state.transactions);
   const { categories } = useSelector((state) => state.categories);
   const { budgets } = useSelector((state) => state.budgets);
   
@@ -32,10 +32,23 @@ const Reports = () => {
   // Load data on component mount and when filters change
   useEffect(() => {
     const { startDate, endDate } = getDateRange();
-    dispatch(fetchTransactions()); // Remove status filter to get all transactions
+    const params = { limit: 100 };
+    if (dateRange !== 'all') {
+      params.startDate = startOfDay(startDate).toISOString();
+      params.endDate = endOfDay(endDate).toISOString();
+    }
+    if (categoryFilter !== 'all') {
+      params.category = categoryFilter;
+    }
+    dispatch(fetchTransactions(params));
     dispatch(fetchCategories());
     dispatch(fetchBudgets());
-  }, [dispatch, dateRange, categoryFilter]);
+
+    const summaryParams = mapDateRangeToSummaryParams();
+    if (summaryParams) {
+      dispatch(fetchAnalyticsSummary(summaryParams));
+    }
+  }, [dispatch, dateRange, categoryFilter, customDateFrom, customDateTo]);
 
   // Get date range based on selection
   const getDateRange = () => {
@@ -55,6 +68,41 @@ const Reports = () => {
         };
       default:
         return { startDate: startOfMonth(now), endDate: endOfMonth(now) };
+    }
+  };
+
+  // Map UI date range selection to analytics summary API params
+  const mapDateRangeToSummaryParams = () => {
+    const now = new Date();
+    switch (dateRange) {
+      case 'thisMonth': {
+        return { period: 'month' };
+      }
+      case 'lastMonth': {
+        const lastMonth = subMonths(now, 1);
+        const startDate = startOfMonth(lastMonth);
+        const endDate = endOfMonth(lastMonth);
+        return {
+          period: 'custom',
+          startDate: startOfDay(startDate).toISOString(),
+          endDate: endOfDay(endDate).toISOString()
+        };
+      }
+      case 'thisYear': {
+        return { period: 'year' };
+      }
+      case 'custom': {
+        if (!customDateFrom || !customDateTo) return null;
+        const startDate = parseISO(customDateFrom);
+        const endDate = parseISO(customDateTo);
+        return {
+          period: 'custom',
+          startDate: startOfDay(startDate).toISOString(),
+          endDate: endOfDay(endDate).toISOString()
+        };
+      }
+      default:
+        return null; // 'all' => skip summary, use client-side fallback
     }
   };
 
@@ -152,40 +200,49 @@ const Reports = () => {
   // Get budget performance
   const getBudgetPerformance = () => {
     return Array.isArray(budgets) ? budgets.map(budget => {
-      const { startDate, endDate } = getDateRange();
+      // Prefer backend-provided metrics when available
+      const totalBudgetAmount = (budget.totalBudget ?? budget.amount ?? 0);
+      const spentFromBackend = (budget.totalSpent ?? budget.spent ?? null);
+      const utilizationFromBackend = budget.utilizationPercentage ?? null;
       
-      // Calculate total budget amount from all categories
-      const totalBudgetAmount = Array.isArray(budget.categories) 
-        ? budget.categories.reduce((sum, cat) => sum + (cat.budgetAmount || 0), 0)
-        : (budget.totalBudget || budget.amount || 0);
+      let spent = typeof spentFromBackend === 'number' ? spentFromBackend : 0;
+      let percentage = typeof utilizationFromBackend === 'number' ? utilizationFromBackend : 0;
       
-      // Get category IDs for this budget
-      const budgetCategoryIds = Array.isArray(budget.categories) 
-        ? budget.categories.map(cat => cat.category?._id || cat.category)
-        : [budget.category?._id || budget.category].filter(Boolean);
+      // Fallback: compute from transactions only if backend metrics are missing
+      if (spentFromBackend == null || utilizationFromBackend == null) {
+        const budgetCategoryIds = Array.isArray(budget.categories) 
+          ? budget.categories.map(cat => cat.category?._id || cat.category)
+          : [budget.category?._id || budget.category].filter(Boolean);
+
+        const budgetTransactions = filteredTransactions.filter(transaction => {
+          const transactionDate = parseISO(transaction.date);
+          const categoryId = transaction.category?._id || transaction.category;
+          return (
+            budgetCategoryIds.includes(categoryId) &&
+            transaction.type === 'expense' &&
+            transactionDate >= parseISO(budget.startDate) &&
+            transactionDate <= parseISO(budget.endDate)
+          );
+        });
+
+        spent = budgetTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+        percentage = totalBudgetAmount > 0 ? (spent / totalBudgetAmount) * 100 : 0;
+      }
       
-      // Filter transactions for this budget's categories and period
-      const budgetTransactions = filteredTransactions.filter(transaction => {
-        const transactionDate = parseISO(transaction.date);
-        const categoryId = transaction.category?._id || transaction.category;
-        return (
-          budgetCategoryIds.includes(categoryId) &&
-          transaction.type === 'expense' &&
-          transactionDate >= parseISO(budget.startDate) &&
-          transactionDate <= parseISO(budget.endDate)
-        );
-      });
-      
-      const spent = budgetTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
-      const percentage = totalBudgetAmount > 0 ? (spent / totalBudgetAmount) * 100 : 0;
+      const remaining = totalBudgetAmount - spent;
+      const statusFromBackend = budget.budgetStatus;
+      const status = (statusFromBackend === 'over_budget' || percentage >= 100)
+        ? 'exceeded'
+        : (statusFromBackend === 'near_limit' || percentage >= 80)
+          ? 'warning'
+          : 'on-track';
       
       return {
         ...budget,
         spent: isNaN(spent) ? 0 : spent,
         percentage: isNaN(percentage) ? 0 : percentage,
-        remaining: isNaN(totalBudgetAmount - spent) ? totalBudgetAmount : totalBudgetAmount - spent,
-        amount: totalBudgetAmount, // Add this for display consistency
-        status: percentage >= 100 ? 'exceeded' : percentage >= 80 ? 'warning' : 'on-track'
+        remaining: isNaN(remaining) ? totalBudgetAmount : remaining,
+        amount: totalBudgetAmount
       };
     }) : [];
   };
@@ -197,9 +254,57 @@ const Reports = () => {
     }).format(amount);
   };
 
-  const metrics = calculateMetrics();
-  const categorySpending = getSpendingByCategory();
-  const monthlyTrends = getMonthlyTrends();
+  const metrics = (() => {
+    if (dateRange !== 'all' && analyticsSummary) {
+      const income = analyticsSummary.totalIncome || 0;
+      const expenses = analyticsSummary.totalExpense || 0;
+      const netIncome = (analyticsSummary.netIncome ?? (income - expenses));
+      const savingsRate = income > 0 ? ((netIncome / income) * 100) : 0;
+      return { income, expenses, netIncome, savingsRate: isNaN(savingsRate) ? 0 : savingsRate };
+    }
+    if (dateRange === 'all' && listSummary) {
+      const income = listSummary.totalIncome || 0;
+      const expenses = listSummary.totalExpense || 0;
+      const netIncome = income - expenses;
+      const savingsRate = income > 0 ? ((netIncome / income) * 100) : 0;
+      return { income, expenses, netIncome, savingsRate: isNaN(savingsRate) ? 0 : savingsRate };
+    }
+    return calculateMetrics();
+  })();
+
+  const categorySpending = (analyticsSummary && dateRange !== 'all')
+    ? (analyticsSummary.categories?.expense || []).map(cat => ({
+        name: cat.name,
+        amount: cat.totalAmount || 0,
+        color: cat.color || '#6B7280',
+        transactions: cat.transactionCount || 0
+      }))
+    : getSpendingByCategory();
+
+  const transformMonthlyTrendsFromSummary = (monthlyData = []) => {
+    const byMonth = {};
+    monthlyData.forEach(entry => {
+      const year = entry._id?.year;
+      const month = entry._id?.month; // 1-12
+      const type = entry._id?.type;
+      const amount = entry.amount || 0;
+      if (year && month) {
+        const dateObj = new Date(year, month - 1, 1);
+        const key = format(dateObj, 'MMM yyyy');
+        if (!byMonth[key]) byMonth[key] = { income: 0, expenses: 0 };
+        if (type === 'income') byMonth[key].income += amount;
+        else if (type === 'expense') byMonth[key].expenses += amount;
+      }
+    });
+    return Object.entries(byMonth)
+      .map(([month, data]) => ({ month, income: data.income, expenses: data.expenses, net: data.income - data.expenses }))
+      .sort((a, b) => new Date(a.month) - new Date(b.month));
+  };
+
+  const monthlyTrends = (analyticsSummary && dateRange === 'thisYear')
+    ? transformMonthlyTrendsFromSummary(analyticsSummary.trends?.monthlyData || [])
+    : getMonthlyTrends();
+
   const budgetPerformance = getBudgetPerformance();
 
   if (loading && transactions.length === 0) {
@@ -222,10 +327,19 @@ const Reports = () => {
           <button 
             onClick={() => {
               const { startDate, endDate } = getDateRange();
-              dispatch(fetchTransactions({ 
-                dateFrom: format(startDate, 'yyyy-MM-dd'),
-                dateTo: format(endDate, 'yyyy-MM-dd')
-              }));
+              const params = {
+                limit: 100,
+                startDate: startOfDay(startDate).toISOString(),
+                endDate: endOfDay(endDate).toISOString()
+              };
+              if (categoryFilter !== 'all') {
+                params.category = categoryFilter;
+              }
+              dispatch(fetchTransactions(params));
+              const summaryParams = mapDateRangeToSummaryParams();
+              if (summaryParams) {
+                dispatch(fetchAnalyticsSummary(summaryParams));
+              }
             }}
             className="btn-primary flex items-center space-x-2"
           >
@@ -234,6 +348,29 @@ const Reports = () => {
           </button>
         </div>
       </div>
+
+      {/* Analytics summary fallback */}
+      {analyticsError && dateRange !== 'all' && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 pr-4">
+              <p className="font-medium">Analytics summary is unavailable.</p>
+              <p className="text-sm">Showing locally computed metrics from transactions. You can retry fetching the summary.</p>
+            </div>
+            <button
+              onClick={() => {
+                const summaryParams = mapDateRangeToSummaryParams();
+                if (summaryParams) {
+                  dispatch(fetchAnalyticsSummary(summaryParams));
+                }
+              }}
+              className="btn-secondary"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-6">

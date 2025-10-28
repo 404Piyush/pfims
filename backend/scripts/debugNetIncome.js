@@ -59,6 +59,29 @@ async function run() {
       return summary;
     };
 
+    // Mimic backend /analytics/summary route (with category lookup/unwind)
+    const routeSummaryForRange = async (start, end) => {
+      const dateMatch = { $gte: start, $lte: end };
+      const pipeline = [
+        { $match: { ...baseMatch, date: dateMatch } },
+        {
+          $lookup: {
+            from: 'categories',
+            localField: 'category',
+            foreignField: '_id',
+            as: 'categoryInfo'
+          }
+        },
+        { $unwind: '$categoryInfo' },
+        { $group: { _id: '$type', total: { $sum: '$amount' }, count: { $sum: 1 } } }
+      ];
+      const grouped = await Transaction.aggregate(pipeline);
+      const summary = { income: 0, expense: 0, transfer: 0, transactionCount: 0 };
+      grouped.forEach(g => { summary[g._id] = g.total; summary.transactionCount += g.count; });
+      summary.netIncome = (summary.income || 0) - (summary.expense || 0);
+      return summary;
+    };
+
     const overallPipeline = [
       { $match: baseMatch },
       { $group: { _id: '$type', total: { $sum: '$amount' }, count: { $sum: 1 } } }
@@ -69,6 +92,7 @@ async function run() {
     overall.netIncome = (overall.income || 0) - (overall.expense || 0);
 
     const currentMonth = await totalsForRange(monthStart, monthEnd);
+    const currentMonthRoute = await routeSummaryForRange(monthStart, monthEnd);
     const prevMonth = await totalsForRange(prevMonthStart, prevMonthEnd);
     const ytd = await totalsForRange(ytdStart, ytdEnd);
 
@@ -79,9 +103,9 @@ async function run() {
     console.log(`Net:      ${fmtINR(overall.netIncome)}`);
 
     console.log(`\n=== PERIOD (${fmtDate(monthStart)} to ${fmtDate(monthEnd)}) ===`);
-    console.log(`Income:   ${fmtINR(currentMonth.income || 0)}`);
-    console.log(`Expenses: ${fmtINR(currentMonth.expense || 0)}`);
-    console.log(`Net:      ${fmtINR(currentMonth.netIncome)}`);
+    console.log(`Income:   ${fmtINR(currentMonth.income || 0)} (route: ${fmtINR(currentMonthRoute.income || 0)})`);
+    console.log(`Expenses: ${fmtINR(currentMonth.expense || 0)} (route: ${fmtINR(currentMonthRoute.expense || 0)})`);
+    console.log(`Net:      ${fmtINR(currentMonth.netIncome)} (route: ${fmtINR(currentMonthRoute.netIncome)})`);
     console.log(`Last Month (${fmtDate(prevMonthStart)} to ${fmtDate(prevMonthEnd)}): Income ${fmtINR(prevMonth.income || 0)}, Expenses ${fmtINR(prevMonth.expense || 0)}, Net ${fmtINR(prevMonth.netIncome)}`);
 
     console.log(`\n=== YEAR TO DATE (${fmtDate(ytdStart)} to ${fmtDate(ytdEnd)}) ===`);
