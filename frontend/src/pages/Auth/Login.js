@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import { login, resendVerificationEmail } from '../../store/slices/authSlice';
+import { requestOtp, verifyOtp, resendVerificationEmail } from '../../store/slices/authSlice';
 import { InlineSpinner } from '../../components/UI/LoadingSpinner';
 
 // Validation schema
@@ -13,15 +13,18 @@ const loginSchema = yup.object({
   email: yup
     .string()
     .email('Please enter a valid email address')
-    .required('Email is required'),
+    .required('Enter your email address'),
   password: yup
     .string()
     .min(6, 'Password must be at least 6 characters')
-    .required('Password is required'),
+    .required('Enter your password'),
 });
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [step, setStep] = useState('credentials');
+  const [otpCode, setOtpCode] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [requiresVerification, setRequiresVerification] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -38,19 +41,45 @@ const Login = () => {
     resolver: yupResolver(loginSchema),
   });
   const [emailValue, setEmailValue] = useState('');
+  const emailRegister = register('email', {
+    onChange: (e) => setEmailValue(e.target.value),
+  });
 
-  const onSubmit = async (data) => {
+  const onSubmitCredentials = async (data) => {
     try {
-      await dispatch(login(data)).unwrap();
-      // Redirect to intended page or dashboard
-      const from = location.state?.from?.pathname || '/';
-      navigate(from, { replace: true });
+      setRequiresVerification(false);
+      setEmailValue(data.email);
+      setLoginPassword(data.password);
+      setOtpCode('');
+      setStep('otp');
+      setResendCooldown(60);
+      await dispatch(requestOtp({ email: data.email, password: data.password, purpose: 'login' })).unwrap();
     } catch (error) {
-      // Detect unverified email case and show resend option
-      const msg = typeof error === 'string' ? error : (error?.message || '');
-      if (msg.toLowerCase().includes('verify your email')) {
+      setStep('credentials');
+      setResendCooldown(0);
+      if (error?.requiresEmailVerification) {
         setRequiresVerification(true);
       }
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    try {
+      await dispatch(verifyOtp({ email: emailValue, purpose: 'login', code: otpCode })).unwrap();
+      const from = location.state?.from?.pathname || '/';
+      navigate(from, { replace: true });
+    } catch (e) {
+      // slice handles toast
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || !emailValue || !loginPassword) return;
+    try {
+      await dispatch(requestOtp({ email: emailValue, password: loginPassword, purpose: 'login' })).unwrap();
+      setResendCooldown(60);
+    } catch (e) {
+      // slice handles toast
     }
   };
 
@@ -75,6 +104,14 @@ const Login = () => {
     return () => clearInterval(interval);
   }, [resendCooldown]);
 
+  const handleFormSubmit =
+    step === 'credentials'
+      ? handleSubmit(onSubmitCredentials)
+      : (e) => {
+          e.preventDefault();
+          handleVerifyOtp();
+        };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-secondary-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -97,20 +134,20 @@ const Login = () => {
 
         {/* Login Form */}
         <div className="bg-white rounded-xl shadow-lg p-8">
-          <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+          <form className="space-y-6" onSubmit={handleFormSubmit}>
             {/* Email Field */}
             <div className="form-group">
               <label htmlFor="email" className="form-label">
                 Email address
               </label>
               <input
-                {...register('email')}
+                {...emailRegister}
                 type="email"
                 id="email"
                 className={`input ${errors.email ? 'input-error' : ''}`}
                 placeholder="Enter your email"
                 autoComplete="email"
-                onChange={(e) => setEmailValue(e.target.value)}
+                disabled={step === 'otp'}
               />
               {errors.email && (
                 <p className="form-error">{errors.email.message}</p>
@@ -130,11 +167,13 @@ const Login = () => {
                   className={`input pr-10 ${errors.password ? 'input-error' : ''}`}
                   placeholder="Enter your password"
                   autoComplete="current-password"
+                  disabled={step === 'otp'}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   onClick={() => setShowPassword(!showPassword)}
+                  disabled={step === 'otp'}
                 >
                   {showPassword ? (
                     <EyeSlashIcon className="h-5 w-5 text-secondary-400" />
@@ -148,8 +187,26 @@ const Login = () => {
               )}
             </div>
 
+            <div className="form-group">
+              <label htmlFor="otp" className="form-label">
+                Email OTP
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                id="otp"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value)}
+                className="input"
+                placeholder="Enter the OTP"
+                autoComplete="one-time-code"
+                disabled={step !== 'otp'}
+              />
+            </div>
+
             {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
+            {step !== 'otp' && (
+              <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input
                   id="remember-me"
@@ -170,23 +227,63 @@ const Login = () => {
                   Forgot your password?
                 </Link>
               </div>
-            </div>
+              </div>
+            )}
 
             {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full btn-primary flex items-center justify-center"
-            >
-              {isLoading ? (
-                <>
-                  <InlineSpinner size="sm" color="white" className="mr-2" />
-                  Signing in...
-                </>
-              ) : (
-                'Sign in'
-              )}
-            </button>
+            {step === 'credentials' ? (
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full btn-primary flex items-center justify-center"
+              >
+                {isLoading ? (
+                  <>
+                    <InlineSpinner size="sm" color="white" className="mr-2" />
+                    Sending OTP...
+                  </>
+                ) : (
+                  'Send OTP'
+                )}
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <button
+                  type="submit"
+                  disabled={isLoading || !otpCode}
+                  className="w-full btn-primary flex items-center justify-center"
+                >
+                  {isLoading ? (
+                    <>
+                      <InlineSpinner size="sm" color="white" className="mr-2" />
+                      Verifying...
+                    </>
+                  ) : (
+                    'Verify & sign in'
+                  )}
+                </button>
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep('credentials');
+                      setOtpCode('');
+                    }}
+                    className="text-sm font-medium text-secondary-600 hover:text-secondary-800 transition-colors"
+                  >
+                    Change email/password
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={resendCooldown > 0}
+                    className="text-sm font-medium text-primary-600 hover:text-primary-500 transition-colors disabled:opacity-50"
+                  >
+                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {requiresVerification && (
               <div className="mt-4">

@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   UserCircleIcon,
-  EnvelopeIcon,
   PhoneIcon,
   CalendarIcon,
   PencilIcon,
@@ -11,7 +10,6 @@ import {
   CameraIcon,
   KeyIcon,
   ShieldCheckIcon,
-  BellIcon,
   EyeIcon,
   EyeSlashIcon,
 } from '@heroicons/react/24/outline';

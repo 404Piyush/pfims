@@ -4,11 +4,11 @@ import { useSelector } from 'react-redux';
 import LoadingSpinner from '../UI/LoadingSpinner';
 
 const ProtectedRoute = ({ children, requireEmailVerification = false }) => {
-  const { isAuthenticated, isLoading, user } = useSelector((state) => state.auth);
+  const { isAuthenticated, isBootstrapping, user } = useSelector((state) => state.auth);
   const location = useLocation();
 
   // Show loading spinner while checking authentication
-  if (isLoading) {
+  if (isBootstrapping) {
     return <LoadingSpinner fullScreen text="Checking authentication..." />;
   }
 

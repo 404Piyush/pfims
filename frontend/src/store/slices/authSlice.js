@@ -24,9 +24,7 @@ export const register = createAsyncThunk(
   async (userData, { rejectWithValue }) => {
     try {
       const response = await authAPI.register(userData);
-      // Since email verification is disabled, store the token and treat as logged in
-      localStorage.setItem('token', response.data.token);
-      toast.success('Registration successful! Welcome to PFIMS!');
+      toast.success('Registration successful! Check your email for the OTP.');
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || 'Registration failed';
@@ -36,9 +34,47 @@ export const register = createAsyncThunk(
   }
 );
 
+export const requestOtp = createAsyncThunk(
+  'auth/requestOtp',
+  async ({ email, purpose, password }, { rejectWithValue }) => {
+    try {
+      const response = await authAPI.sendOtp({ email, purpose, password });
+      toast.success(response.data?.message || 'OTP sent');
+      return { ...response.data, email, purpose };
+    } catch (error) {
+      const data = error.response?.data;
+      const message = data?.message || 'Failed to send OTP';
+      if (data?.requiresEmailVerification) {
+        toast.error(message);
+        return rejectWithValue({ message, requiresEmailVerification: true });
+      }
+      toast.error(message);
+      return rejectWithValue({ message });
+    }
+  }
+);
+
+export const verifyOtp = createAsyncThunk(
+  'auth/verifyOtp',
+  async ({ email, purpose, code }, { rejectWithValue }) => {
+    try {
+      const response = await authAPI.verifyOtp({ email, purpose, code });
+      if (response.data?.token) {
+        localStorage.setItem('token', response.data.token);
+      }
+      toast.success(response.data?.message || 'OTP verified');
+      return response.data;
+    } catch (error) {
+      const message = error.response?.data?.message || 'OTP verification failed';
+      toast.error(message);
+      return rejectWithValue(message);
+    }
+  }
+);
+
 export const logout = createAsyncThunk(
   'auth/logout',
-  async (_, { rejectWithValue }) => {
+  async () => {
     try {
       await authAPI.logout();
       localStorage.removeItem('token');
@@ -65,6 +101,21 @@ export const checkAuth = createAsyncThunk(
     } catch (error) {
       localStorage.removeItem('token');
       return rejectWithValue('Authentication failed');
+    }
+  }
+);
+
+export const saveInvestmentProfile = createAsyncThunk(
+  'auth/saveInvestmentProfile',
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await authAPI.saveInvestmentProfile(payload);
+      toast.success('Investment profile saved');
+      return response.data;
+    } catch (error) {
+      const message = error.response?.data?.message || 'Failed to save investment profile';
+      toast.error(message);
+      return rejectWithValue(message);
     }
   }
 );
@@ -163,7 +214,8 @@ const initialState = {
   user: null,
   token: localStorage.getItem('token'),
   isAuthenticated: false,
-  isLoading: true,
+  isBootstrapping: true,
+  isLoading: false,
   error: null,
   isEmailVerified: false,
 };
@@ -208,13 +260,45 @@ const authSlice = createSlice({
       })
       .addCase(register.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.isAuthenticated = true;
+        state.isAuthenticated = false;
         state.user = action.payload.user;
-        state.token = action.payload.token;
-        state.isEmailVerified = true; // Since email verification is disabled
+        state.token = null;
+        state.isEmailVerified = action.payload.user?.isEmailVerified || false;
         state.error = null;
       })
       .addCase(register.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+
+      // OTP request
+      .addCase(requestOtp.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(requestOtp.fulfilled, (state) => {
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(requestOtp.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload?.message || action.payload;
+      })
+
+      // OTP verify
+      .addCase(verifyOtp.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(verifyOtp.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.isAuthenticated = true;
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+        state.isEmailVerified = action.payload.user?.isEmailVerified || false;
+        state.error = null;
+      })
+      .addCase(verifyOtp.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       })
@@ -230,9 +314,11 @@ const authSlice = createSlice({
       
       // Check Auth
       .addCase(checkAuth.pending, (state) => {
+        state.isBootstrapping = true;
         state.isLoading = true;
       })
       .addCase(checkAuth.fulfilled, (state, action) => {
+        state.isBootstrapping = false;
         state.isLoading = false;
         state.isAuthenticated = true;
         state.user = action.payload.user;
@@ -240,11 +326,29 @@ const authSlice = createSlice({
         state.error = null;
       })
       .addCase(checkAuth.rejected, (state) => {
+        state.isBootstrapping = false;
         state.isLoading = false;
         state.isAuthenticated = false;
         state.user = null;
         state.token = null;
         state.error = null;
+      })
+
+      .addCase(saveInvestmentProfile.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(saveInvestmentProfile.fulfilled, (state, action) => {
+        state.isLoading = false;
+        if (action.payload?.user) {
+          state.user = action.payload.user;
+          state.isEmailVerified = action.payload.user?.isEmailVerified || state.isEmailVerified;
+        }
+        state.error = null;
+      })
+      .addCase(saveInvestmentProfile.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
       })
       
       // Forgot Password

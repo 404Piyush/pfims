@@ -62,26 +62,8 @@ export const getTransactionStats = createAsyncThunk(
   }
 );
 
-// Analytics summary thunk for Reports & Analytics page
-export const fetchAnalyticsSummary = createAsyncThunk(
-  'transactions/fetchAnalyticsSummary',
-  async (params = {}, { rejectWithValue }) => {
-    try {
-      const response = await api.get('/transactions/analytics/summary', { params });
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch analytics summary');
-    }
-  }
-);
-
 const initialState = {
   transactions: [],
-  listSummary: {
-    totalIncome: 0,
-    totalExpense: 0,
-    count: 0
-  },
   stats: {
     totalIncome: 0,
     totalExpenses: 0,
@@ -89,22 +71,6 @@ const initialState = {
     monthlyData: [],
     categoryBreakdown: []
   },
-  analyticsSummary: {
-    totalIncome: 0,
-    totalExpense: 0,
-    netIncome: 0,
-    transactionCount: 0,
-    categories: {
-      income: [],
-      expense: []
-    },
-    trends: {
-      period: 'month',
-      dateRange: { start: null, end: null },
-      monthlyData: []
-    }
-  },
-  analyticsError: null,
   loading: false,
   error: null,
   pagination: {
@@ -168,17 +134,6 @@ const transactionSlice = createSlice({
         } else if (action.payload.pagination) {
           state.pagination = action.payload.pagination;
         }
-        // Capture summary totals from list endpoint when available
-        const summary = action.payload?.data?.summary || action.payload?.summary;
-        if (summary && typeof summary === 'object') {
-          state.listSummary = {
-            totalIncome: summary.totalIncome ?? 0,
-            totalExpense: summary.totalExpense ?? 0,
-            count: summary.count ?? summary.transactionCount ?? 0
-          };
-        } else {
-          state.listSummary = initialState.listSummary;
-        }
       })
       .addCase(fetchTransactions.rejected, (state, action) => {
         state.loading = false;
@@ -191,19 +146,15 @@ const transactionSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-  .addCase(createTransaction.fulfilled, (state, action) => {
-    state.loading = false;
-    // Normalize payload shape to the actual transaction object
-    const created = action.payload?.data?.transaction
-      || action.payload?.transaction
-      || action.payload;
-    // Ensure transactions is an array before using unshift
-    if (Array.isArray(state.transactions)) {
-      state.transactions.unshift(created);
-    } else {
-      state.transactions = [created];
-    }
-  })
+      .addCase(createTransaction.fulfilled, (state, action) => {
+        state.loading = false;
+        // Ensure transactions is an array before using unshift
+        if (Array.isArray(state.transactions)) {
+          state.transactions.unshift(action.payload);
+        } else {
+          state.transactions = [action.payload];
+        }
+      })
       .addCase(createTransaction.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
@@ -214,25 +165,18 @@ const transactionSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-  .addCase(updateTransaction.fulfilled, (state, action) => {
-    state.loading = false;
-    // Normalize payload shape to the actual transaction object
-    const updated = action.payload?.data?.transaction
-      || action.payload?.transaction
-      || action.payload;
-    // Ensure transactions is an array before using findIndex
-    if (Array.isArray(state.transactions)) {
-      const index = state.transactions.findIndex(t => t._id === updated?._id);
-      if (index !== -1) {
-        state.transactions[index] = updated;
-      } else if (updated) {
-        // If not found, append updated transaction
-        state.transactions.push(updated);
-      }
-    } else {
-      state.transactions = updated ? [updated] : [];
-    }
-  })
+      .addCase(updateTransaction.fulfilled, (state, action) => {
+        state.loading = false;
+        // Ensure transactions is an array before using findIndex
+        if (Array.isArray(state.transactions)) {
+          const index = state.transactions.findIndex(t => t._id === action.payload._id);
+          if (index !== -1) {
+            state.transactions[index] = action.payload;
+          }
+        } else {
+          state.transactions = [action.payload];
+        }
+      })
       .addCase(updateTransaction.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
@@ -269,35 +213,6 @@ const transactionSlice = createSlice({
       .addCase(getTransactionStats.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      })
-      
-      // Fetch analytics summary
-      .addCase(fetchAnalyticsSummary.pending, (state) => {
-        state.loading = true;
-        state.analyticsError = null;
-      })
-      .addCase(fetchAnalyticsSummary.fulfilled, (state, action) => {
-        state.loading = false;
-        const payload = action.payload?.data ?? action.payload;
-        if (payload && typeof payload === 'object') {
-          state.analyticsSummary = {
-            totalIncome: payload.totalIncome ?? 0,
-            totalExpense: payload.totalExpense ?? 0,
-            netIncome: payload.netIncome ?? 0,
-            transactionCount: payload.transactionCount ?? 0,
-            categories: payload.categories ?? { income: [], expense: [] },
-            trends: {
-              period: payload.trends?.period ?? 'month',
-              dateRange: payload.trends?.dateRange ?? { start: null, end: null },
-              monthlyData: payload.trends?.monthlyData ?? []
-            }
-          };
-        }
-      })
-      .addCase(fetchAnalyticsSummary.rejected, (state, action) => {
-        state.loading = false;
-        state.analyticsError = action.payload || 'Failed to load analytics summary';
-        state.analyticsSummary = initialState.analyticsSummary;
       });
   }
 });

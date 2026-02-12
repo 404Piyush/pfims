@@ -52,17 +52,17 @@ const CategoryForm = ({
     const newErrors = {};
 
     if (!formData.name.trim()) {
-      newErrors.name = 'Category name is required';
+      newErrors.name = 'Enter a category name (e.g., Groceries, Rent)';
     } else if (formData.name.trim().length < 2) {
       newErrors.name = 'Category name must be at least 2 characters';
     }
 
     if (!formData.type) {
-      newErrors.type = 'Category type is required';
+      newErrors.type = 'Select whether this category is Income or Expense';
     }
 
     if (!formData.color) {
-      newErrors.color = 'Color is required';
+      newErrors.color = 'Pick a color to make this category easy to spot';
     }
 
     setErrors(newErrors);

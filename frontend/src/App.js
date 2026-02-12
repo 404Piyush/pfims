@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { checkAuth } from './store/slices/authSlice';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -8,6 +8,7 @@ import Layout from './components/Layout/Layout';
 import LoadingSpinner from './components/UI/LoadingSpinner';
 import Toast from './components/UI/Toast';
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
+import { Toaster } from 'react-hot-toast';
 
 // Auth pages
 import Login from './pages/Auth/Login';
@@ -26,19 +27,21 @@ import Reports from './pages/Reports/Reports';
 import Profile from './pages/Profile/Profile';
 import Settings from './pages/Settings/Settings';
 import Assistant from './pages/Assistant/Assistant';
+import Portfolio from './pages/Portfolio/Portfolio';
+import InvestmentProfileOnboarding from './pages/Onboarding/InvestmentProfileOnboarding';
 
 // Error pages
 import NotFound from './pages/Error/NotFound';
 
 function App() {
   const dispatch = useDispatch();
-  const { isAuthenticated, loading: authLoading } = useSelector((state) => state.auth);
+  const { isBootstrapping } = useSelector((state) => state.auth);
 
   useEffect(() => {
     dispatch(checkAuth());
   }, [dispatch]);
 
-  if (authLoading) {
+  if (isBootstrapping) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-secondary-50">
         <LoadingSpinner size="lg" text="Loading..." />
@@ -92,6 +95,15 @@ function App() {
               }
             />
 
+            <Route
+              path="/onboarding/investment-profile"
+              element={
+                <ProtectedRoute>
+                  <InvestmentProfileOnboarding />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Protected routes with Layout */}
             <Route
               path="/"
@@ -107,6 +119,18 @@ function App() {
               <Route path="categories" element={<Categories />} />
               <Route path="budgets" element={<Budgets />} />
               <Route path="reports" element={<Reports />} />
+              <Route path="portfolio" element={<Portfolio />} />
+              <Route
+                path="mutual-funds"
+                element={
+                  <InvestmentProfileOnboarding
+                    embedded
+                    title="Mutual Funds"
+                    subtitle="Answer the questionnaire to generate ranked mutual fund picks."
+                    continueTo="/"
+                  />
+                }
+              />
               <Route path="assistant" element={<Assistant />} />
               <Route path="profile" element={<Profile />} />
               <Route path="settings" element={<Settings />} />
@@ -118,6 +142,7 @@ function App() {
 
           {/* Global Toast notifications */}
           <Toast />
+          <Toaster position="top-right" />
         </div>
     </ErrorBoundary>
   );

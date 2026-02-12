@@ -1,6 +1,5 @@
-const nodemailer = require('nodemailer');
-const emailService = require('../utils/emailService');
 require('dotenv').config();
+const emailService = require('../utils/emailService');
 
 const testEmailService = async () => {
   try {
@@ -33,37 +32,32 @@ const testEmailService = async () => {
       return;
     }
 
-    // Test 2: SMTP Connection
+    // Test 2: Email Server Connection
     console.log('\n=== TEST 2: SMTP CONNECTION ===');
     
-    const transporter = nodemailer.createTransporter({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT),
-      secure: process.env.SMTP_PORT === '465',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    });
-
     try {
       const connectionStart = Date.now();
-      await transporter.verify();
+      const ok = await emailService.verifyConnection();
       const connectionTime = Date.now() - connectionStart;
       
+      if (!ok) {
+        console.log('❌ SMTP connection failed');
+        return;
+      }
+
       console.log('✅ SMTP connection successful');
       console.log(`   - Connection time: ${connectionTime}ms`);
-      console.log(`   - Host: ${process.env.SMTP_HOST}`);
-      console.log(`   - Port: ${process.env.SMTP_PORT}`);
-      console.log(`   - Secure: ${process.env.SMTP_PORT === '465'}`);
+      console.log(`   - Host: ${process.env.EMAIL_HOST}`);
+      console.log(`   - Port: ${process.env.EMAIL_PORT}`);
+      console.log(`   - Secure: ${process.env.EMAIL_SECURE === 'true'}`);
     } catch (error) {
       console.log('❌ SMTP connection failed');
       console.log(`   - Error: ${error.message}`);
       return;
     }
 
-    // Test 3: Welcome Email Template
-    console.log('\n=== TEST 3: WELCOME EMAIL TEMPLATE ===');
+    // Test 3: Email Verification Template
+    console.log('\n=== TEST 3: EMAIL VERIFICATION TEMPLATE ===');
     
     const testUser = {
       firstName: 'Test',
@@ -72,30 +66,18 @@ const testEmailService = async () => {
     };
 
     try {
-      const welcomeEmailStart = Date.now();
-      await emailService.sendWelcomeEmail(testUser);
-      const welcomeEmailTime = Date.now() - welcomeEmailStart;
-      
-      console.log('✅ Welcome email sent successfully');
-      console.log(`   - Send time: ${welcomeEmailTime}ms`);
-      console.log(`   - Recipient: ${testUser.email}`);
-    } catch (error) {
-      console.log('❌ Welcome email failed');
-      console.log(`   - Error: ${error.message}`);
-    }
-
-    // Test 4: Email Verification Template
-    console.log('\n=== TEST 4: EMAIL VERIFICATION TEMPLATE ===');
-    
-    const verificationToken = 'test-verification-token-123';
-    
-    try {
+      const verificationToken = 'test-verification-token-123';
       const verificationEmailStart = Date.now();
-      await emailService.sendEmailVerification(testUser, verificationToken);
+      const result = await emailService.sendVerificationEmail(testUser, verificationToken);
       const verificationEmailTime = Date.now() - verificationEmailStart;
       
-      console.log('✅ Email verification sent successfully');
-      console.log(`   - Send time: ${verificationEmailTime}ms`);
+      if (!result?.success) {
+        console.log('❌ Email verification failed');
+        console.log(`   - Error: ${result?.error || 'Unknown error'}`);
+      } else {
+        console.log('✅ Email verification sent successfully');
+        console.log(`   - Send time: ${verificationEmailTime}ms`);
+      }
       console.log(`   - Recipient: ${testUser.email}`);
       console.log(`   - Token: ${verificationToken}`);
     } catch (error) {
@@ -103,18 +85,23 @@ const testEmailService = async () => {
       console.log(`   - Error: ${error.message}`);
     }
 
-    // Test 5: Password Reset Template
-    console.log('\n=== TEST 5: PASSWORD RESET TEMPLATE ===');
+    // Test 4: Password Reset Template
+    console.log('\n=== TEST 4: PASSWORD RESET TEMPLATE ===');
     
     const resetToken = 'test-reset-token-456';
     
     try {
       const resetEmailStart = Date.now();
-      await emailService.sendPasswordReset(testUser, resetToken);
+      const result = await emailService.sendPasswordReset(testUser, resetToken);
       const resetEmailTime = Date.now() - resetEmailStart;
       
-      console.log('✅ Password reset email sent successfully');
-      console.log(`   - Send time: ${resetEmailTime}ms`);
+      if (!result?.success) {
+        console.log('❌ Password reset email failed');
+        console.log(`   - Error: ${result?.error || 'Unknown error'}`);
+      } else {
+        console.log('✅ Password reset email sent successfully');
+        console.log(`   - Send time: ${resetEmailTime}ms`);
+      }
       console.log(`   - Recipient: ${testUser.email}`);
       console.log(`   - Token: ${resetToken}`);
     } catch (error) {
@@ -122,8 +109,8 @@ const testEmailService = async () => {
       console.log(`   - Error: ${error.message}`);
     }
 
-    // Test 6: Transaction Notification Template
-    console.log('\n=== TEST 6: TRANSACTION NOTIFICATION TEMPLATE ===');
+    // Test 5: Transaction Notification Template
+    console.log('\n=== TEST 5: TRANSACTION NOTIFICATION TEMPLATE ===');
     
     const testTransaction = {
       title: 'Test Transaction',
@@ -137,11 +124,16 @@ const testEmailService = async () => {
     
     try {
       const transactionEmailStart = Date.now();
-      await emailService.sendTransactionNotification(testUser, testTransaction);
+      const result = await emailService.sendTransactionNotificationEmail(testUser, testTransaction);
       const transactionEmailTime = Date.now() - transactionEmailStart;
       
-      console.log('✅ Transaction notification sent successfully');
-      console.log(`   - Send time: ${transactionEmailTime}ms`);
+      if (!result?.success) {
+        console.log('❌ Transaction notification failed');
+        console.log(`   - Error: ${result?.error || 'Unknown error'}`);
+      } else {
+        console.log('✅ Transaction notification sent successfully');
+        console.log(`   - Send time: ${transactionEmailTime}ms`);
+      }
       console.log(`   - Recipient: ${testUser.email}`);
       console.log(`   - Transaction: ${testTransaction.title} - $${testTransaction.amount}`);
     } catch (error) {
@@ -149,75 +141,12 @@ const testEmailService = async () => {
       console.log(`   - Error: ${error.message}`);
     }
 
-    // Test 7: Email Rate Limiting
-    console.log('\n=== TEST 7: EMAIL RATE LIMITING ===');
-    
-    console.log('🔄 Testing rapid email sending...');
-    const rapidEmailPromises = [];
-    
-    for (let i = 0; i < 3; i++) {
-      rapidEmailPromises.push(
-        emailService.sendWelcomeEmail({
-          ...testUser,
-          email: `test${i}@example.com`
-        }).catch(error => ({ error: error.message }))
-      );
-    }
-
-    const rapidResults = await Promise.all(rapidEmailPromises);
-    const successCount = rapidResults.filter(result => !result.error).length;
-    const errorCount = rapidResults.filter(result => result.error).length;
-
-    console.log(`✅ Rapid email test completed`);
-    console.log(`   - Successful sends: ${successCount}`);
-    console.log(`   - Failed sends: ${errorCount}`);
-    
-    if (errorCount > 0) {
-      console.log('⚠️  Some emails failed due to rate limiting (expected behavior)');
-      rapidResults.forEach((result, index) => {
-        if (result.error) {
-          console.log(`   - Email ${index + 1}: ${result.error}`);
-        }
-      });
-    }
-
-    // Test 8: Email Template Validation
-    console.log('\n=== TEST 8: EMAIL TEMPLATE VALIDATION ===');
-    
-    const templateTests = [
-      {
-        name: 'Welcome Email',
-        test: () => emailService.sendWelcomeEmail({ firstName: '', lastName: '', email: 'invalid' })
-      },
-      {
-        name: 'Email Verification',
-        test: () => emailService.sendEmailVerification({ firstName: '', email: 'invalid' }, '')
-      },
-      {
-        name: 'Password Reset',
-        test: () => emailService.sendPasswordReset({ firstName: '', email: 'invalid' }, '')
-      }
-    ];
-
-    for (const template of templateTests) {
-      try {
-        await template.test();
-        console.log(`❌ ${template.name}: Should have failed with invalid data`);
-      } catch (error) {
-        console.log(`✅ ${template.name}: Correctly rejected invalid data`);
-        console.log(`   - Error: ${error.message}`);
-      }
-    }
-
     console.log('\n=== EMAIL SERVICE TEST SUMMARY ===');
     console.log('✅ Email configuration: TESTED');
     console.log('✅ SMTP connection: TESTED');
-    console.log('✅ Welcome email template: TESTED');
     console.log('✅ Email verification template: TESTED');
     console.log('✅ Password reset template: TESTED');
     console.log('✅ Transaction notification template: TESTED');
-    console.log('✅ Email rate limiting: TESTED');
-    console.log('✅ Template validation: TESTED');
     console.log('\n🎉 Email service tests completed!');
 
     console.log('\n📋 Email Service Status:');

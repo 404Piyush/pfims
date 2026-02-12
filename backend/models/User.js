@@ -71,6 +71,70 @@ const userSchema = new mongoose.Schema({
       default: false
     }
   },
+  onboarding: {
+    investmentProfileCompleted: {
+      type: Boolean,
+      default: false
+    },
+    investmentProfileCompletedAt: Date
+  },
+  investmentProfile: {
+    answers: {
+      riskTolerance: {
+        type: Number,
+        min: 1,
+        max: 4
+      },
+      investmentDuration: {
+        type: Number,
+        min: 1,
+        max: 4
+      },
+      savingsCapacity: {
+        type: Number,
+        min: 1,
+        max: 4
+      },
+      financialGoal: {
+        type: Number,
+        min: 1,
+        max: 4
+      },
+      financialGoals: [
+        {
+          type: Number,
+          min: 1,
+          max: 4
+        }
+      ],
+      age: {
+        type: Number,
+        min: 0,
+        max: 150
+      },
+      hasEmergencyFund: Boolean,
+      hasHighInterestDebt: Boolean
+    },
+    score: Number,
+    profile: {
+      type: String,
+      enum: ['Conservative', 'Moderate', 'Aggressive']
+    },
+    status: {
+      type: String,
+      enum: ['success', 'warning', 'blocked'],
+      default: 'success'
+    },
+    allocation: {
+      largeCap: Number,
+      midCap: Number,
+      smallCap: Number,
+      bonds: Number,
+      liquidFund: Number
+    },
+    explanation: String,
+    updatedAt: Date
+  },
   isEmailVerified: {
     type: Boolean,
     default: false
@@ -104,6 +168,29 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['user', 'admin'],
     default: 'user'
+  },
+  integrations: {
+    groww: {
+      apiKeyEnc: {
+        type: String,
+        default: ''
+      },
+      apiSecretEnc: {
+        type: String,
+        default: ''
+      },
+      accounts: [
+        {
+          id: { type: String, required: true },
+          label: { type: String, required: true },
+          apiKeyEnc: { type: String, default: '' },
+          apiSecretEnc: { type: String, default: '' },
+          createdAt: { type: Date, default: Date.now },
+          updatedAt: Date,
+        },
+      ],
+      updatedAt: Date
+    }
   }
 }, {
   timestamps: true
@@ -149,6 +236,7 @@ userSchema.methods.toJSON = function() {
   delete user.otpAttempts;
   delete user.otpLastSentAt;
   delete user.otpResendCount;
+  delete user.integrations;
   return user;
 };
 

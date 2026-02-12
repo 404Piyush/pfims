@@ -4,7 +4,8 @@ import {
   CurrencyDollarIcon, 
   CalendarIcon, 
   TagIcon,
-  DocumentTextIcon 
+  DocumentTextIcon,
+  MapPinIcon
 } from '@heroicons/react/24/outline';
 
 const TransactionForm = ({ 
@@ -22,6 +23,7 @@ const TransactionForm = ({
     description: '',
     category: '',
     account: 'Cash', // Default account
+    location: '',
     date: new Date().toISOString().split('T')[0],
     notes: ''
   });
@@ -38,6 +40,7 @@ const TransactionForm = ({
         description: transaction.description || '',
         category: transaction.category?._id || transaction.category || '',
         account: transaction.account || 'Cash',
+        location: transaction.location || '',
         date: transaction.date ? new Date(transaction.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         notes: transaction.notes || ''
       });
@@ -48,23 +51,27 @@ const TransactionForm = ({
     const newErrors = {};
 
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      newErrors.amount = 'Amount must be greater than 0';
+      newErrors.amount = 'Enter an amount greater than 0';
     }
 
     if (!formData.title.trim()) {
-      newErrors.title = 'Title is required';
+      newErrors.title = 'Add a short title (e.g., Groceries, Salary)';
     }
 
     if (!formData.account.trim()) {
-      newErrors.account = 'Account is required';
+      newErrors.account = 'Enter an account name (e.g., Cash, HDFC Savings)';
     }
 
     if (!formData.category) {
-      newErrors.category = 'Category is required';
+      newErrors.category = 'Choose a category to track this transaction';
+    }
+
+    if (formData.location && formData.location.trim().length > 100) {
+      newErrors.location = 'Location cannot exceed 100 characters';
     }
 
     if (!formData.date) {
-      newErrors.date = 'Date is required';
+      newErrors.date = 'Choose a transaction date';
     } else {
       // Validate that date is not in the future
       const selectedDate = new Date(formData.date);
@@ -213,6 +220,29 @@ const TransactionForm = ({
         </div>
         {errors.account && (
           <p className="mt-1 text-sm text-red-600">{errors.account}</p>
+        )}
+      </div>
+
+      {/* Location */}
+      <div>
+        <label className="block text-sm font-medium text-secondary-700 mb-2">
+          Location (Optional)
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <MapPinIcon className="h-5 w-5 text-secondary-400" />
+          </div>
+          <input
+            type="text"
+            value={formData.location}
+            onChange={(e) => handleChange('location', e.target.value)}
+            className={`input pl-10 ${errors.location ? 'border-red-500' : ''}`}
+            placeholder="e.g., Los Angeles, CA"
+            maxLength={100}
+          />
+        </div>
+        {errors.location && (
+          <p className="mt-1 text-sm text-red-600">{errors.location}</p>
         )}
       </div>
 

@@ -78,6 +78,8 @@ const initialState = {
   budgets: [],
   progress: [],
   alerts: [],
+  progressLoading: false,
+  alertsLoading: false,
   stats: {
     totalBudgets: 0,
     activeBudgets: 0,
@@ -120,7 +122,7 @@ const budgetSlice = createSlice({
       }
     },
     markAlertAsRead: (state, action) => {
-      const alert = state.alerts.find(a => a._id === action.payload);
+      const alert = state.alerts.find(a => (a.id || a._id) === action.payload);
       if (alert) {
         alert.isRead = true;
       }
@@ -210,29 +212,31 @@ const budgetSlice = createSlice({
       
       // Get budget progress
       .addCase(getBudgetProgress.pending, (state) => {
-        state.loading = true;
+        state.progressLoading = true;
         state.error = null;
       })
       .addCase(getBudgetProgress.fulfilled, (state, action) => {
-        state.loading = false;
-        state.progress = action.payload;
+        state.progressLoading = false;
+        state.progress = Array.isArray(action.payload) ? action.payload : [];
       })
       .addCase(getBudgetProgress.rejected, (state, action) => {
-        state.loading = false;
+        state.progressLoading = false;
         state.error = action.payload;
       })
       
       // Get budget alerts
       .addCase(getBudgetAlerts.pending, (state) => {
-        state.loading = true;
+        state.alertsLoading = true;
         state.error = null;
       })
       .addCase(getBudgetAlerts.fulfilled, (state, action) => {
-        state.loading = false;
-        state.alerts = action.payload;
+        state.alertsLoading = false;
+        state.alerts = Array.isArray(action.payload)
+          ? action.payload.map((alert) => ({ ...alert, isRead: Boolean(alert.isRead) }))
+          : [];
       })
       .addCase(getBudgetAlerts.rejected, (state, action) => {
-        state.loading = false;
+        state.alertsLoading = false;
         state.error = action.payload;
       });
   }

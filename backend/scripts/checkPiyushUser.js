@@ -12,7 +12,7 @@ const checkPiyushUser = async () => {
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pfims');
     console.log('✅ Connected to MongoDB\n');
 
-    const email = 'piyush@gmail.com';
+    const email = 'piyushutkarxb@gmail.com';
     
     // Find the user
     const user = await User.findOne({ email });

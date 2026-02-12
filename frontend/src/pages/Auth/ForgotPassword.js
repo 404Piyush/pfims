@@ -12,7 +12,7 @@ const schema = yup.object({
   email: yup
     .string()
     .email('Please enter a valid email address')
-    .required('Email is required'),
+    .required('Enter your email address'),
 });
 
 const ForgotPassword = () => {

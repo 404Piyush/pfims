@@ -1,7 +1,6 @@
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
-// Ensure fetch is available across Node versions
-const fetch = global.fetch || require('node-fetch');
+const ExcelJS = require('exceljs');
 
 class EmailService {
   constructor() {
@@ -69,7 +68,7 @@ class EmailService {
     return true;
   }
 
-  async sendViaMailgun(to, subject, html, text = null) {
+  async sendViaMailgun(to, subject, html, text = null, options = {}) {
     if (!this.mailgunConfigured) {
       throw new Error('Mailgun not configured');
     }
@@ -78,22 +77,53 @@ class EmailService {
     const domain = process.env.MAILGUN_DOMAIN;
     const from = process.env.MAILGUN_FROM || `"${process.env.EMAIL_FROM_NAME || 'PFIMS'}" <postmaster@${domain}>`;
 
-    const params = new URLSearchParams();
-    params.append('from', from);
-    params.append('to', to);
-    params.append('subject', subject);
-    if (text) params.append('text', text);
-    if (html) params.append('html', html);
-
     const url = `https://api.mailgun.net/v3/${domain}/messages`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: 'Basic ' + Buffer.from(`api:${apiKey}`).toString('base64'),
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: params.toString()
-    });
+    const authHeader = 'Basic ' + Buffer.from(`api:${apiKey}`).toString('base64');
+
+    const attachments = Array.isArray(options?.attachments) ? options.attachments : [];
+    const hasAttachments = attachments.length > 0;
+
+    let res;
+    if (hasAttachments) {
+      const form = new FormData();
+      form.append('from', from);
+      form.append('to', to);
+      form.append('subject', subject);
+      if (text) form.append('text', text);
+      if (html) form.append('html', html);
+
+      attachments.forEach((a) => {
+        const filename = a?.filename || 'attachment';
+        const contentType = a?.contentType || 'application/octet-stream';
+        const content = Buffer.isBuffer(a?.content) ? a.content : Buffer.from(a?.content || '');
+        const blob = new Blob([content], { type: contentType });
+        form.append('attachment', blob, filename);
+      });
+
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: authHeader,
+        },
+        body: form,
+      });
+    } else {
+      const params = new URLSearchParams();
+      params.append('from', from);
+      params.append('to', to);
+      params.append('subject', subject);
+      if (text) params.append('text', text);
+      if (html) params.append('html', html);
+
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: authHeader,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+      });
+    }
 
     if (!res.ok) {
       const errText = await res.text().catch(() => 'Unknown error');
@@ -105,7 +135,11 @@ class EmailService {
     return { success: true, messageId: data.id, response: data.message };
   }
 
-  async sendEmail(to, subject, html, text = null) {
+  async sendEmail(to, subject, html, text = null, options = {}) {
+    if (text && typeof text === 'object' && !Array.isArray(text)) {
+      options = text;
+      text = null;
+    }
     if (!this.isConfigured) {
       console.warn('⚠️ Email service not configured. Skipping email send.');
       return { success: false, error: 'Email service not configured' };
@@ -114,7 +148,7 @@ class EmailService {
     // Prefer Mailgun when configured
     if (this.mailgunConfigured) {
       try {
-        return await this.sendViaMailgun(to, subject, html, text || this.stripHtml(html));
+        return await this.sendViaMailgun(to, subject, html, text || this.stripHtml(html), options);
       } catch (mgError) {
         console.error('❌ Mailgun send failed, attempting SMTP fallback:', mgError.message);
         // Fall through to SMTP if available
@@ -131,7 +165,8 @@ class EmailService {
         to,
         subject,
         html,
-        text: text || this.stripHtml(html)
+        text: text || this.stripHtml(html),
+        ...(options?.attachments ? { attachments: options.attachments } : {})
       };
 
       const info = await this.transporter.sendMail(mailOptions);
@@ -241,11 +276,6 @@ class EmailService {
       'Reset Your Password - PFIMS',
       html
     );
-  }
-
-  // Backward-compatible alias (some routes call sendPasswordResetEmail)
-  async sendPasswordResetEmail(user, resetToken) {
-    return await this.sendPasswordReset(user, resetToken);
   }
 
   async sendBudgetAlertEmail(user, budget, category, alertType) {
@@ -486,10 +516,81 @@ class EmailService {
     return html;
   }
 
-  async sendReportEmail(user, report, period) {
+  async generateReportXlsxBuffer(user, report, period) {
+    const title = period === 'weekly' ? 'Weekly Financial Summary' : 'Monthly Financial Summary';
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'PFIMS';
+    workbook.created = new Date();
+
+    const summarySheet = workbook.addWorksheet('Summary', { views: [{ state: 'frozen', ySplit: 4 }] });
+    summarySheet.getCell('A1').value = title;
+    summarySheet.getCell('A1').font = { size: 16, bold: true };
+
+    const startLabel = report?.periodRange?.start ? new Date(report.periodRange.start).toLocaleDateString() : '';
+    const endLabel = report?.periodRange?.end ? new Date(report.periodRange.end).toLocaleDateString() : '';
+    summarySheet.getCell('A2').value = startLabel && endLabel ? `${startLabel} – ${endLabel}` : '';
+    summarySheet.getCell('A2').font = { color: { argb: 'FF64748B' } };
+
+    summarySheet.getCell('A4').value = 'Currency';
+    summarySheet.getCell('B4').value = user.currency || '';
+
+    summarySheet.getCell('A6').value = 'Income';
+    summarySheet.getCell('B6').value = Number(report?.summary?.income || 0);
+    summarySheet.getCell('A7').value = 'Expenses';
+    summarySheet.getCell('B7').value = Number(report?.summary?.expense || 0);
+    summarySheet.getCell('A8').value = 'Net Income';
+    summarySheet.getCell('B8').value = { formula: 'B6-B7' };
+    summarySheet.getCell('A9').value = 'Savings Rate';
+    summarySheet.getCell('B9').value = { formula: 'IF(B6=0,0,B8/B6)' };
+    summarySheet.getCell('A10').value = 'Transactions';
+    summarySheet.getCell('B10').value = Number(report?.summary?.transactionCount || 0);
+
+    ['B6', 'B7', 'B8'].forEach((addr) => {
+      summarySheet.getCell(addr).numFmt = '#,##0.00';
+    });
+    summarySheet.getCell('B9').numFmt = '0.00%';
+
+    for (let r = 6; r <= 10; r += 1) {
+      summarySheet.getCell(`A${r}`).font = { bold: true };
+    }
+
+    summarySheet.columns = [
+      { key: 'label', width: 22 },
+      { key: 'value', width: 18 },
+    ];
+
+    const categoriesSheet = workbook.addWorksheet('Top Categories', { views: [{ state: 'frozen', ySplit: 1 }] });
+    categoriesSheet.columns = [
+      { header: 'Category', key: 'categoryName', width: 28 },
+      { header: 'Amount', key: 'total', width: 16, style: { numFmt: '#,##0.00' } },
+    ];
+    categoriesSheet.getRow(1).font = { bold: true };
+
+    const topCategories = Array.isArray(report?.topCategories) ? report.topCategories : [];
+    topCategories.forEach((c) => {
+      categoriesSheet.addRow({
+        categoryName: c?.categoryName || 'N/A',
+        total: Number(c?.total || 0),
+      });
+    });
+
+    const totalRowIndex = Math.max(2, topCategories.length + 2);
+    categoriesSheet.getCell(`A${totalRowIndex}`).value = 'Total';
+    categoriesSheet.getCell(`A${totalRowIndex}`).font = { bold: true };
+    const sumStart = 2;
+    const sumEnd = Math.max(2, totalRowIndex - 1);
+    categoriesSheet.getCell(`B${totalRowIndex}`).value = { formula: `SUM(B${sumStart}:B${sumEnd})` };
+    categoriesSheet.getCell(`B${totalRowIndex}`).font = { bold: true };
+    categoriesSheet.getCell(`B${totalRowIndex}`).numFmt = '#,##0.00';
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  async sendReportEmail(user, report, period, options = {}) {
     const subject = period === 'weekly' ? 'Weekly Financial Summary - PFIMS' : 'Monthly Financial Summary - PFIMS';
     const html = this.generateReportHtml(user, report, period);
-    return await this.sendEmail(user.email, subject, html);
+    return await this.sendEmail(user.email, subject, html, null, options);
   }
 
   stripHtml(html) {

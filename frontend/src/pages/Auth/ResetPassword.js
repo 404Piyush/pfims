@@ -23,7 +23,7 @@ const schema = yup.object({
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
       'Password must contain uppercase, lowercase, number and special character'
     )
-    .required('Password is required'),
+    .required('Create a new password'),
   confirmPassword: yup
     .string()
     .oneOf([yup.ref('password')], 'Passwords must match')
