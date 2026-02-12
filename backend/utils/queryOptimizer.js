@@ -8,34 +8,39 @@ class QueryOptimizer {
    * Build optimized aggregation pipeline for transaction analytics
    */
   static buildTransactionAnalyticsPipeline(userId, filters = {}) {
-    // Only include supported filter fields in $match to avoid leaking arbitrary keys like startDate/endDate
     const match = {
       user: new mongoose.Types.ObjectId(userId)
     };
 
     if (filters.type) match.type = filters.type;
     if (filters.category) match.category = filters.category;
-    if (filters.status) match.status = filters.status; // Only add status if explicitly provided
+    if (filters.status) match.status = filters.status;
 
-    // Add date filtering if provided
     if (filters.startDate || filters.endDate) {
-      const dateMatch = {};
-      if (filters.startDate) {
-        const start = new Date(filters.startDate);
-        // Normalize to start-of-day in local timezone
-        start.setHours(0, 0, 0, 0);
-        dateMatch.$gte = start;
-      }
-      if (filters.endDate) {
-        const end = new Date(filters.endDate);
-        // Ensure endDate includes end-of-day
-        end.setHours(23, 59, 59, 999);
-        dateMatch.$lte = end;
-      }
-      match.date = dateMatch;
+      match.date = {};
+      if (filters.startDate) match.date.$gte = new Date(filters.startDate);
+      if (filters.endDate) match.date.$lte = new Date(filters.endDate);
     }
 
-    return [ { $match: match } ];
+    if (filters.minAmount || filters.maxAmount) {
+      match.amount = {};
+      if (filters.minAmount) match.amount.$gte = parseFloat(filters.minAmount);
+      if (filters.maxAmount) match.amount.$lte = parseFloat(filters.maxAmount);
+    }
+
+    if (filters.search) {
+      match.$or = [
+        { title: { $regex: filters.search, $options: 'i' } },
+        { description: { $regex: filters.search, $options: 'i' } },
+        { location: { $regex: filters.search, $options: 'i' } }
+      ];
+    }
+
+    if (filters.location) {
+      match.location = { $regex: filters.location, $options: 'i' };
+    }
+
+    return [{ $match: match }];
   }
 
   /**
@@ -52,18 +57,8 @@ class QueryOptimizer {
     if (filters.status) query.status = filters.status; // Only add status if explicitly provided
     if (filters.startDate || filters.endDate) {
       query.date = {};
-      if (filters.startDate) {
-        const start = new Date(filters.startDate);
-        // Normalize to start-of-day in local timezone to avoid UTC cutoff issues
-        start.setHours(0, 0, 0, 0);
-        query.date.$gte = start;
-      }
-      if (filters.endDate) {
-        const end = new Date(filters.endDate);
-        // Normalize to end-of-day in local timezone
-        end.setHours(23, 59, 59, 999);
-        query.date.$lte = end;
-      }
+      if (filters.startDate) query.date.$gte = new Date(filters.startDate);
+      if (filters.endDate) query.date.$lte = new Date(filters.endDate);
     }
     if (filters.minAmount || filters.maxAmount) {
       query.amount = {};
@@ -73,8 +68,12 @@ class QueryOptimizer {
     if (filters.search) {
       query.$or = [
         { title: { $regex: filters.search, $options: 'i' } },
-        { description: { $regex: filters.search, $options: 'i' } }
+        { description: { $regex: filters.search, $options: 'i' } },
+        { location: { $regex: filters.search, $options: 'i' } }
       ];
+    }
+    if (filters.location) {
+      query.location = { $regex: filters.location, $options: 'i' };
     }
 
     return query;
@@ -316,8 +315,6 @@ class QueryOptimizer {
     if (startDate) {
       const start = new Date(startDate);
       if (!isNaN(start.getTime())) {
-        // Normalize to start-of-day in local timezone to avoid missing local midnight entries
-        start.setHours(0, 0, 0, 0);
         dateFilter.$gte = start;
       }
     }

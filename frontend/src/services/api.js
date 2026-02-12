@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 
+const navigateTo = (path) => {
+  if (window.location.pathname === path) return;
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+};
+
 // Create axios instance
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
@@ -41,11 +47,15 @@ api.interceptors.response.use(
     // Handle different status codes
     switch (response.status) {
       case 401:
-        // Unauthorized - clear token and redirect to login
         localStorage.removeItem('token');
-        if (window.location.pathname !== '/login') {
-          toast.error('Session expired. Please login again.');
-          window.location.href = '/login';
+        {
+          const url = response?.config?.url || '';
+          const isAuthRequest =
+            url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/otp/');
+          if (!isAuthRequest) {
+            toast.error('Session expired. Please login again.');
+            navigateTo('/login');
+          }
         }
         break;
 

@@ -509,12 +509,12 @@ router.get('/budget-performance', auth, async (req, res) => {
         utilizationPercentage: budget.utilizationPercentage,
         remainingBudget: budget.remainingBudget,
         daysRemaining: budget.daysRemaining,
-        status: budget.budgetStatus,
+        status: budget.status,
         categories: budget.categories.map(cat => ({
           category: cat.category,
-          budget: cat.budget,
-          spent: cat.spent,
-          utilization: cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0
+          budgetAmount: cat.budgetAmount,
+          spentAmount: cat.spentAmount,
+          utilization: cat.budgetAmount > 0 ? (cat.spentAmount / cat.budgetAmount) * 100 : 0
         }))
       })),
       completedPerformance: completedBudgets.map(budget => ({
@@ -556,13 +556,13 @@ router.get('/budget-performance', auth, async (req, res) => {
         categoryPerformance[categoryId].budgets.push({
           budgetId: budget._id,
           budgetName: budget.name,
-          budget: cat.budget,
-          spent: cat.spent,
-          utilization: cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0
+          budgetAmount: cat.budgetAmount,
+          spentAmount: cat.spentAmount,
+          utilization: cat.budgetAmount > 0 ? (cat.spentAmount / cat.budgetAmount) * 100 : 0
         });
         
-        categoryPerformance[categoryId].totalBudget += cat.budget;
-        categoryPerformance[categoryId].totalSpent += cat.spent;
+        categoryPerformance[categoryId].totalBudget += cat.budgetAmount;
+        categoryPerformance[categoryId].totalSpent += cat.spentAmount;
         categoryPerformance[categoryId].budgetCount += 1;
       });
     });
@@ -591,7 +591,15 @@ router.get('/budget-performance', auth, async (req, res) => {
           budgetCount: { $sum: 1 },
           totalBudget: { $sum: '$totalBudget' },
           totalSpent: { $sum: '$totalSpent' },
-          avgUtilization: { $avg: '$utilizationPercentage' }
+          avgUtilization: {
+            $avg: {
+              $cond: [
+                { $gt: ['$totalBudget', 0] },
+                { $multiply: [{ $divide: ['$totalSpent', '$totalBudget'] }, 100] },
+                0
+              ]
+            }
+          }
         }
       },
       {
@@ -989,7 +997,17 @@ router.post('/email/weekly', auth, async (req, res) => {
     }
 
     const report = { summary, topCategories, periodRange: { start, end: now } };
-    const result = await emailService.sendReportEmail(req.user, report, 'weekly');
+    const xlsxBuffer = await emailService.generateReportXlsxBuffer(req.user, report, 'weekly');
+    const fileName = `pfims_weekly_report_${now.toISOString().slice(0, 10)}.xlsx`;
+    const result = await emailService.sendReportEmail(req.user, report, 'weekly', {
+      attachments: [
+        {
+          filename: fileName,
+          content: xlsxBuffer,
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }
+      ]
+    });
 
     if (!result.success) {
       return res.status(500).json({ message: 'Failed to send weekly report email', error: result.error });

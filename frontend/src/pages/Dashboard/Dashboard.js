@@ -1,9 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
-import { format, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns';
-import { fetchTransactions } from '../../store/slices/transactionSlice';
-import api from '../../services/api';
+import { useSelector } from 'react-redux';
+import { format, parseISO } from 'date-fns';
 import {
   PlusIcon,
   ArrowTrendingUpIcon,
@@ -13,203 +11,198 @@ import {
   ChartBarIcon,
   EyeIcon,
 } from '@heroicons/react/24/outline';
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
+import api from '../../services/api';
 
-// Mock data - replace with actual API calls
-const mockDashboardData = {
-  summary: {
-    totalBalance: 15420.50,
-    monthlyIncome: 5200.00,
-    monthlyExpenses: 3180.75,
-    monthlyNet: 2019.25,
-    budgetUtilization: 68.5,
-    savingsRate: 38.8,
-  },
-  recentTransactions: [
-    {
-      id: 1,
-      description: 'Grocery Store',
-      amount: -85.50,
-      category: 'Food & Dining',
-      date: '2024-01-15',
-      type: 'expense'
-    },
-    {
-      id: 2,
-      description: 'Salary Deposit',
-      amount: 2600.00,
-      category: 'Salary',
-      date: '2024-01-15',
-      type: 'income'
-    },
-    {
-      id: 3,
-      description: 'Electric Bill',
-      amount: -120.00,
-      category: 'Utilities',
-      date: '2024-01-14',
-      type: 'expense'
-    },
-    {
-      id: 4,
-      description: 'Coffee Shop',
-      amount: -4.50,
-      category: 'Food & Dining',
-      date: '2024-01-14',
-      type: 'expense'
-    },
-    {
-      id: 5,
-      description: 'Gas Station',
-      amount: -45.00,
-      category: 'Transportation',
-      date: '2024-01-13',
-      type: 'expense'
-    },
-  ],
-  monthlyTrend: [
-    { month: 'Aug', income: 4800, expenses: 3200, net: 1600 },
-    { month: 'Sep', income: 5000, expenses: 3400, net: 1600 },
-    { month: 'Oct', income: 5200, expenses: 3100, net: 2100 },
-    { month: 'Nov', income: 5100, expenses: 3300, net: 1800 },
-    { month: 'Dec', income: 5300, expenses: 3500, net: 1800 },
-    { month: 'Jan', income: 5200, expenses: 3180, net: 2020 },
-  ],
-  categoryBreakdown: [
-    { name: 'Food & Dining', value: 850, color: '#ef4444' },
-    { name: 'Transportation', value: 420, color: '#f97316' },
-    { name: 'Utilities', value: 380, color: '#eab308' },
-    { name: 'Entertainment', value: 280, color: '#22c55e' },
-    { name: 'Shopping', value: 520, color: '#3b82f6' },
-    { name: 'Healthcare', value: 180, color: '#8b5cf6' },
-    { name: 'Other', value: 250, color: '#6b7280' },
-  ],
-  budgetProgress: [
-    { category: 'Food & Dining', budgeted: 1000, spent: 850, percentage: 85 },
-    { category: 'Transportation', budgeted: 500, spent: 420, percentage: 84 },
-    { category: 'Utilities', budgeted: 400, spent: 380, percentage: 95 },
-    { category: 'Entertainment', budgeted: 300, spent: 280, percentage: 93 },
-    { category: 'Shopping', budgeted: 600, spent: 520, percentage: 87 },
-  ],
+const pctChange = (current, previous) => {
+  const c = Number(current);
+  const p = Number(previous);
+  if (!Number.isFinite(c) || !Number.isFinite(p) || p === 0) return null;
+  return ((c - p) / p) * 100;
+};
+
+const getPeriodRange = (period) => {
+  const now = new Date();
+  let start;
+  let prevStart;
+  let prevEnd;
+
+  if (period === 'week') {
+    start = new Date(now);
+    start.setDate(now.getDate() - 7);
+    prevEnd = new Date(start);
+    prevStart = new Date(start);
+    prevStart.setDate(start.getDate() - 7);
+  } else if (period === 'month') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    prevEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  } else if (period === 'quarter') {
+    const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+    start = new Date(now.getFullYear(), quarterStartMonth, 1);
+    prevStart = new Date(start);
+    prevStart.setMonth(start.getMonth() - 3);
+    prevEnd = new Date(start);
+    prevEnd.setDate(0);
+  } else if (period === 'year') {
+    start = new Date(now.getFullYear(), 0, 1);
+    prevStart = new Date(now.getFullYear() - 1, 0, 1);
+    prevEnd = new Date(now.getFullYear(), 0, 0);
+  } else {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    prevEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  }
+
+  return { now, start, prevStart, prevEnd };
 };
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  const { transactions } = useSelector((state) => state.transactions);
   const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState(mockDashboardData);
+  const [dashboardData, setDashboardData] = useState({
+    rangeLabel: '',
+    summary: {
+      income: 0,
+      expenses: 0,
+      net: 0,
+      savingsRate: 0,
+    },
+    changes: {},
+    trend: [],
+    categoryBreakdown: [],
+    recentTransactions: [],
+    budgetProgress: [],
+  });
   const [selectedPeriod, setSelectedPeriod] = useState('month');
 
   useEffect(() => {
-    // Fetch dashboard data for current and previous month, and overall balance
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        const now = new Date();
-        const currentStart = startOfMonth(now);
-        const currentEnd = endOfMonth(now);
-
-        const prev = subMonths(now, 1);
-        const prevStart = startOfMonth(prev);
-        const prevEnd = endOfMonth(prev);
-
-        // Fetch recent transactions for the current month for the list (uses slice store)
-        await dispatch(fetchTransactions({
-          startDate: startOfDay(currentStart).toISOString(),
-          endDate: endOfDay(currentEnd).toISOString(),
-          sortBy: 'date',
-          sortOrder: 'desc',
-          limit: 100
-        }));
-
-        // Fetch summary analytics for current and previous month
-        const [currentSummaryRes, previousSummaryRes, overallSummaryRes] = await Promise.all([
-          api.get('/transactions/analytics/summary', {
-            params: {
-              period: 'custom',
-              startDate: startOfDay(currentStart).toISOString(),
-              endDate: endOfDay(currentEnd).toISOString()
-            }
-          }),
-          api.get('/transactions/analytics/summary', {
-            params: {
-              period: 'custom',
-              startDate: startOfDay(prevStart).toISOString(),
-              endDate: endOfDay(prevEnd).toISOString()
-            }
-          }),
-          // Overall balance to date (simple approximation using all recorded transactions)
-          api.get('/transactions/analytics/summary', {
-            params: {
-              period: 'year' // Use YTD as a practical overall balance proxy
-            }
-          })
-        ]);
-
-        const currentSummary = currentSummaryRes?.data?.data || {};
-        const previousSummary = previousSummaryRes?.data?.data || {};
-        const overallSummary = overallSummaryRes?.data?.data || {};
-
-        const monthlyIncome = Number(currentSummary.totalIncome || 0);
-        const monthlyExpenses = Number(currentSummary.totalExpense || 0);
-        const monthlyNet = Number(currentSummary.netIncome || 0);
-
-        const previousMonthIncome = Number(previousSummary.totalIncome || 0);
-        const previousMonthExpenses = Number(previousSummary.totalExpense || 0);
-        const previousMonthNet = Number(previousSummary.netIncome || 0);
-
-        // Percentage changes where possible
-        const incomePct = previousMonthIncome > 0
-          ? ((monthlyIncome - previousMonthIncome) / previousMonthIncome) * 100
-          : null;
-        const expensePct = previousMonthExpenses > 0
-          ? ((monthlyExpenses - previousMonthExpenses) / previousMonthExpenses) * 100
-          : null;
-        const netPct = previousMonthNet !== 0
-          ? ((monthlyNet - previousMonthNet) / Math.abs(previousMonthNet)) * 100
-          : null;
-
-        // Amount differences (used when percent is not meaningful)
-        const incomeDiff = monthlyIncome - previousMonthIncome;
-        const expenseDiff = monthlyExpenses - previousMonthExpenses;
-        const netDiff = monthlyNet - previousMonthNet;
-
-        // Helper to format change text
-        const formatChangeText = (pct, diff, prevVal) => {
-          if (pct !== null) {
-            const sign = pct >= 0 ? '+' : '';
-            return `${sign}${pct.toFixed(1)}% from last month`;
-          }
-          // When previous month has no data, show last month's value and absolute change
-          const diffSign = diff >= 0 ? '+' : '';
-          return `Last month: ${formatCurrency(prevVal)} (${diffSign}${formatCurrency(Math.abs(diff))} difference)`;
+        const { now, start, prevStart, prevEnd } = getPeriodRange(selectedPeriod);
+        const currentOverviewParams = { period: selectedPeriod };
+        const prevOverviewParams = {
+          period: 'custom',
+          startDate: format(prevStart, 'yyyy-MM-dd'),
+          endDate: format(prevEnd, 'yyyy-MM-dd'),
         };
 
-        setDashboardData(prev => ({
-          ...prev,
+        const [currentOverviewRes, prevOverviewRes, recentRes, budgetRes] = await Promise.all([
+          api.get('/reports/overview', { params: currentOverviewParams }),
+          api.get('/reports/overview', { params: prevOverviewParams }),
+          api.get('/transactions', { params: { sortBy: 'date', sortOrder: 'desc', limit: 5 } }),
+          api.get('/budgets/progress', { params: { refresh: true } }),
+        ]);
+
+        const currentOverview = currentOverviewRes?.data || {};
+        const prevOverview = prevOverviewRes?.data || {};
+
+        const curSummary = currentOverview.summary || {};
+        const prevSummary = prevOverview.summary || {};
+        const income = Number(curSummary.income || 0);
+        const expenses = Number(curSummary.expense || 0);
+        const net = Number(curSummary.netIncome ?? (income - expenses));
+        const savingsRate = income > 0 ? (net / income) * 100 : 0;
+
+        const incomeDelta = pctChange(income, Number(prevSummary.income || 0));
+        const expenseDelta = pctChange(expenses, Number(prevSummary.expense || 0));
+        const netDelta = pctChange(net, Number(prevSummary.netIncome ?? 0));
+
+        const dailyTrends = Array.isArray(currentOverview.dailyTrends) ? currentOverview.dailyTrends : [];
+        let trend = dailyTrends.map((d) => {
+          const dateStr = d?._id;
+          const date = typeof dateStr === 'string' ? parseISO(dateStr) : null;
+          return {
+            label: date ? format(date, 'MMM d') : String(dateStr || ''),
+            income: Number(d?.income || 0),
+            expenses: Number(d?.expense || 0),
+          };
+        });
+
+        if (trend.length > 60) {
+          const byMonth = new Map();
+          for (const d of dailyTrends) {
+            const dateStr = d?._id;
+            const date = typeof dateStr === 'string' ? parseISO(dateStr) : null;
+            if (!date) continue;
+            const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            const prev = byMonth.get(key) || { label: format(date, 'MMM yy'), income: 0, expenses: 0 };
+            prev.income += Number(d?.income || 0);
+            prev.expenses += Number(d?.expense || 0);
+            byMonth.set(key, prev);
+          }
+          trend = Array.from(byMonth.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([, v]) => v);
+        }
+
+        const rawBreakdown = Array.isArray(currentOverview.categoryBreakdown) ? currentOverview.categoryBreakdown : [];
+        const expenseBreakdown = rawBreakdown
+          .filter((c) => c?._id?.type === 'expense')
+          .map((c) => ({
+            name: c?.categoryName || 'Uncategorized',
+            value: Number(c?.total || 0),
+            color: c?.categoryColor || '#6b7280',
+          }))
+          .filter((c) => c.value > 0);
+
+        const sortedBreakdown = expenseBreakdown.sort((a, b) => b.value - a.value);
+        const top = sortedBreakdown.slice(0, 7);
+        const rest = sortedBreakdown.slice(7);
+        const restTotal = rest.reduce((s, x) => s + x.value, 0);
+        const categoryBreakdown = restTotal > 0 ? top.concat([{ name: 'Other', value: restTotal, color: '#6b7280' }]) : top;
+
+        const recentPayload = recentRes?.data;
+        const recentList =
+          Array.isArray(recentPayload)
+            ? recentPayload
+            : (recentPayload?.data?.transactions || recentPayload?.transactions || []);
+        const recentTransactions = Array.isArray(recentList)
+          ? recentList.slice(0, 5).map((t) => ({
+              id: t?._id || t?.id,
+              description: t?.title || t?.description || '',
+              amount: t?.type === 'expense' ? -Number(t?.amount || 0) : Number(t?.amount || 0),
+              category: t?.category?.name || t?.category || 'Uncategorized',
+              date: t?.date,
+              type: t?.type,
+            }))
+          : [];
+
+        const budgetProgress = Array.isArray(budgetRes?.data)
+          ? budgetRes.data.slice(0, 6).map((b) => ({
+              id: b?.budgetId,
+              name: b?.name || 'Budget',
+              budgeted: Number(b?.totalBudget || 0),
+              spent: Number(b?.totalSpent || 0),
+              percentage: Number(b?.utilizationPercentage || 0),
+            }))
+          : [];
+
+        const rangeStart = currentOverview?.dateRange?.start ? new Date(currentOverview.dateRange.start) : start;
+        const rangeEnd = currentOverview?.dateRange?.end ? new Date(currentOverview.dateRange.end) : now;
+        const rangeLabel = `${format(rangeStart, 'MMM d')} – ${format(rangeEnd, 'MMM d, yyyy')}`;
+
+        setDashboardData({
+          rangeLabel,
           summary: {
-            ...prev.summary,
-            monthlyIncome,
-            monthlyExpenses,
-            monthlyNet,
-            savingsRate: monthlyIncome > 0 ? ((monthlyNet / monthlyIncome) * 100) : 0,
-            // Overall balance proxy: year-to-date net income
-            totalBalance: Number(overallSummary.netIncome || 0)
+            income,
+            expenses,
+            net,
+            savingsRate,
           },
           changes: {
-            income: incomePct,
-            incomeText: formatChangeText(incomePct, incomeDiff, previousMonthIncome),
-            expenses: expensePct,
-            expensesText: formatChangeText(expensePct, expenseDiff, previousMonthExpenses),
-            net: netPct,
-            netText: formatChangeText(netPct, netDiff, previousMonthNet),
-            balance: netPct, // use net trend for balance
-            balanceText: formatChangeText(netPct, netDiff, previousMonthNet)
-          }
-        }));
+            income: incomeDelta,
+            expenses: expenseDelta,
+            net: netDelta,
+          },
+          trend,
+          categoryBreakdown,
+          recentTransactions,
+          budgetProgress,
+        });
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -218,24 +211,7 @@ const Dashboard = () => {
     };
 
     fetchDashboardData();
-  }, [selectedPeriod, dispatch]);
-
-  // Update recent transactions list when store changes
-  useEffect(() => {
-    if (transactions && transactions.length > 0) {
-      setDashboardData(prev => ({
-        ...prev,
-        recentTransactions: transactions.slice(0, 5).map(transaction => ({
-          id: transaction._id,
-          description: transaction.title || transaction.description,
-          amount: transaction.type === 'expense' ? -transaction.amount : transaction.amount,
-          category: transaction.category?.name || transaction.category || 'Uncategorized',
-          date: transaction.date,
-          type: transaction.type
-        }))
-      }));
-    }
-  }, [transactions]);
+  }, [selectedPeriod]);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
@@ -284,7 +260,7 @@ const Dashboard = () => {
             Welcome back, {user?.firstName}!
           </h1>
           <p className="text-secondary-600 mt-1">
-            Here's your financial overview for {format(new Date(), 'MMMM yyyy')}
+            Here's your financial overview for {dashboardData.rangeLabel || format(new Date(), 'MMMM yyyy')}
           </p>
         </div>
         <div className="flex items-center space-x-3 mt-4 sm:mt-0">
@@ -311,44 +287,42 @@ const Dashboard = () => {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Total Balance (YTD)"
-          value={formatCurrency(dashboardData.summary.totalBalance)}
-          change={dashboardData.changes?.balanceText}
+          title="Net Cash Flow"
+          value={formatCurrency(dashboardData.summary.net)}
+          change={Number.isFinite(dashboardData.changes?.net) ? 
+            `${dashboardData.changes.net >= 0 ? '+' : ''}${dashboardData.changes.net.toFixed(1)}% vs previous period` : 
+            undefined}
           icon={BanknotesIcon}
           color="primary"
-          trend={dashboardData.changes?.balance !== null && dashboardData.changes?.balance !== undefined
-            ? (dashboardData.changes.balance >= 0 ? 'up' : 'down')
-            : 'neutral'}
+          trend={Number(dashboardData.summary.net) >= 0 ? "up" : "down"}
         />
         <StatCard
-          title="Monthly Income"
-          value={formatCurrency(dashboardData.summary.monthlyIncome)}
-          change={dashboardData.changes?.incomeText}
+          title="Income"
+          value={formatCurrency(dashboardData.summary.income)}
+          change={Number.isFinite(dashboardData.changes?.income) ? 
+            `${dashboardData.changes.income >= 0 ? '+' : ''}${dashboardData.changes.income.toFixed(1)}% vs previous period` : 
+            undefined}
           icon={ArrowTrendingUpIcon}
           color="success"
-          trend={dashboardData.changes?.income !== null && dashboardData.changes?.income !== undefined
-            ? (dashboardData.changes.income >= 0 ? 'up' : 'down')
-            : 'neutral'}
+          trend={Number(dashboardData.summary.income) >= 0 ? "up" : "down"}
         />
         <StatCard
-          title="Monthly Expenses"
-          value={formatCurrency(dashboardData.summary.monthlyExpenses)}
-          change={dashboardData.changes?.expensesText}
+          title="Expenses"
+          value={formatCurrency(dashboardData.summary.expenses)}
+          change={Number.isFinite(dashboardData.changes?.expenses) ? 
+            `${dashboardData.changes.expenses >= 0 ? '+' : ''}${dashboardData.changes.expenses.toFixed(1)}% vs previous period` : 
+            undefined}
           icon={ArrowTrendingDownIcon}
           color="danger"
-          trend={dashboardData.changes?.expenses !== null && dashboardData.changes?.expenses !== undefined
-            ? (dashboardData.changes.expenses >= 0 ? 'up' : 'down')
-            : 'neutral'}
+          trend={Number(dashboardData.summary.expenses) >= 0 ? "up" : "down"}
         />
         <StatCard
-          title="Net Income"
-          value={formatCurrency(dashboardData.summary.monthlyNet)}
-          change={dashboardData.changes?.netText}
+          title="Savings Rate"
+          value={`${(Number(dashboardData.summary.savingsRate) || 0).toFixed(1)}%`}
+          change={undefined}
           icon={ChartBarIcon}
           color="primary"
-          trend={dashboardData.changes?.net !== null && dashboardData.changes?.net !== undefined
-            ? (dashboardData.changes.net >= 0 ? 'up' : 'down')
-            : 'neutral'}
+          trend={Number(dashboardData.summary.savingsRate) >= 0 ? "up" : "down"}
         />
       </div>
 
@@ -366,9 +340,9 @@ const Dashboard = () => {
           </div>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dashboardData.monthlyTrend}>
+              <AreaChart data={dashboardData.trend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
+                <XAxis dataKey="label" stroke="#64748b" fontSize={12} />
                 <YAxis stroke="#64748b" fontSize={12} />
                 <Tooltip
                   contentStyle={{
@@ -501,10 +475,10 @@ const Dashboard = () => {
           </div>
           <div className="space-y-4">
             {dashboardData.budgetProgress.map((budget) => (
-              <div key={budget.category}>
+              <div key={budget.id || budget.name}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-secondary-700">
-                    {budget.category}
+                    {budget.name}
                   </span>
                   <span className="text-sm text-secondary-500">
                     {formatCurrency(budget.spent)} / {formatCurrency(budget.budgeted)}
@@ -530,7 +504,7 @@ const Dashboard = () => {
                       ? 'text-warning-600'
                       : 'text-success-600'
                   }`}>
-                    {budget.percentage}% used
+                    {Number(budget.percentage || 0).toFixed(0)}% used
                   </span>
                   <span className="text-xs text-secondary-500">
                     {formatCurrency(budget.budgeted - budget.spent)} left

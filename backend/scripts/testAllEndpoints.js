@@ -1,15 +1,72 @@
-const axios = require('axios');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const Category = require('../models/Category');
 require('dotenv').config();
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3001';
 const API_URL = `${BASE_URL}/api`;
 
 let authToken = '';
 let testUserId = '';
+
+const axios = {
+  async request({ method, url, headers, data, params }) {
+    const u = new URL(url);
+    if (params && typeof params === 'object') {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value === undefined || value === null) return;
+        u.searchParams.set(key, String(value));
+      });
+    }
+
+    let body;
+    const requestHeaders = { ...(headers || {}) };
+    if (data !== undefined) {
+      body = JSON.stringify(data);
+      if (!Object.keys(requestHeaders).some((h) => h.toLowerCase() === 'content-type')) {
+        requestHeaders['Content-Type'] = 'application/json';
+      }
+    }
+
+    let res;
+    try {
+      res = await fetch(u.toString(), { method, headers: requestHeaders, body });
+    } catch (e) {
+      const err = new Error(e?.message || 'Network request failed');
+      err.response = undefined;
+      throw err;
+    }
+
+    const raw = await res.text().catch(() => '');
+    let parsed = raw;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch {
+      parsed = raw;
+    }
+
+    if (!res.ok) {
+      const err = new Error(`Request failed with status code ${res.status}`);
+      err.response = { status: res.status, data: parsed };
+      throw err;
+    }
+
+    return { status: res.status, data: parsed };
+  },
+  get(url, config) {
+    return this.request({ method: 'GET', url, headers: config?.headers, params: config?.params });
+  },
+  post(url, data, config) {
+    return this.request({ method: 'POST', url, headers: config?.headers, data, params: config?.params });
+  },
+  put(url, data, config) {
+    return this.request({ method: 'PUT', url, headers: config?.headers, data, params: config?.params });
+  },
+  delete(url, config) {
+    return this.request({ method: 'DELETE', url, headers: config?.headers, params: config?.params });
+  }
+};
 
 const testAllEndpoints = async () => {
   try {
@@ -23,7 +80,7 @@ const testAllEndpoints = async () => {
     // Test 1: Health Check
     console.log('=== TEST 1: HEALTH CHECK ===');
     try {
-      const response = await axios.get(`${BASE_URL}/health`);
+      const response = await axios.get(`${API_URL}/health`);
       console.log('✅ Health check passed');
       console.log(`   - Status: ${response.status}`);
       console.log(`   - Response: ${JSON.stringify(response.data)}`);
@@ -96,6 +153,61 @@ const testAllEndpoints = async () => {
       console.log(`   - Email: ${response.data.email}`);
     } catch (error) {
       console.log('❌ Get user profile failed');
+      console.log(`   - Status: ${error.response?.status}`);
+      console.log(`   - Error: ${error.response?.data?.message || error.message}`);
+    }
+
+    // Test 4B: MFAPI.IN (External) Endpoints
+    console.log('\n=== TEST 4B: MFAPI.IN ENDPOINTS ===');
+
+    try {
+      const listRes = await axios.get('https://api.mfapi.in/mf', { params: { limit: 1, offset: 0 } });
+      const first = Array.isArray(listRes.data) ? listRes.data[0] : null;
+      console.log('✅ MFAPI list schemes successful');
+      console.log(`   - First scheme: ${first?.schemeCode || 'n/a'} ${first?.schemeName || ''}`);
+
+      const searchRes = await axios.get('https://api.mfapi.in/mf/search', { params: { q: 'HDFC Top 100 Fund Direct Plan Growth' } });
+      const searchFirst = Array.isArray(searchRes.data) ? searchRes.data[0] : null;
+      console.log('✅ MFAPI search successful');
+      console.log(`   - First search result: ${searchFirst?.schemeCode || 'n/a'} ${searchFirst?.schemeName || ''}`);
+
+      const schemeCode = searchFirst?.schemeCode || 125497;
+      const latestRes = await axios.get(`https://api.mfapi.in/mf/${schemeCode}/latest`);
+      console.log('✅ MFAPI latest NAV successful');
+      console.log(`   - Scheme: ${latestRes.data?.meta?.scheme_name || ''}`);
+      console.log(`   - Category: ${latestRes.data?.meta?.scheme_category || ''}`);
+      console.log(`   - Latest: ${latestRes.data?.data?.[0]?.date || ''} NAV=${latestRes.data?.data?.[0]?.nav || ''}`);
+    } catch (error) {
+      console.log('❌ MFAPI endpoint test failed');
+      console.log(`   - Error: ${error.response?.data?.message || error.message}`);
+    }
+
+    // Test 4C: Investment Profile Recommendation (Mutual Funds)
+    console.log('\n=== TEST 4C: INVESTMENT PROFILE RECOMMENDATION ===');
+
+    try {
+      const payload = {
+        riskTolerance: 3,
+        investmentDuration: 4,
+        savingsCapacity: 3,
+        financialGoals: [3, 4],
+        age: 25,
+        hasEmergencyFund: true,
+        hasHighInterestDebt: false
+      };
+
+      const response = await axios.put(`${API_URL}/users/investment-profile`, payload, { headers: authHeaders });
+      const count = Array.isArray(response.data?.mutualFunds?.items) ? response.data.mutualFunds.items.length : 0;
+      console.log('✅ Investment profile saved with mutual fund recommendations');
+      console.log(`   - Status: ${response.status}`);
+      console.log(`   - Profile: ${response.data?.investmentProfile?.profile || 'n/a'}`);
+      console.log(`   - Mutual fund items: ${count}`);
+      if (count) {
+        const top = response.data.mutualFunds.items[0];
+        console.log(`   - Top pick: ${top.schemeCode} ${top.schemeName}`);
+      }
+    } catch (error) {
+      console.log('❌ Investment profile recommendation test failed');
       console.log(`   - Status: ${error.response?.status}`);
       console.log(`   - Error: ${error.response?.data?.message || error.message}`);
     }

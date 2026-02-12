@@ -4,17 +4,16 @@ import { useSelector } from 'react-redux';
 import LoadingSpinner from '../UI/LoadingSpinner';
 
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated, isLoading } = useSelector((state) => state.auth);
+  const { isAuthenticated, isBootstrapping } = useSelector((state) => state.auth);
   const location = useLocation();
 
   // Show loading spinner while checking authentication
-  if (isLoading) {
+  if (isBootstrapping) {
     return <LoadingSpinner fullScreen text="Loading..." />;
   }
 
   // Redirect to dashboard if already authenticated
   if (isAuthenticated) {
-    // Get the intended destination from location state, or default to dashboard
     const from = location.state?.from?.pathname || '/';
     return <Navigate to={from} replace />;
   }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
@@ -14,27 +14,27 @@ import {
   EnvelopeIcon,
   LockClosedIcon,
 } from '@heroicons/react/24/outline';
-import { register as registerUser } from '../../store/slices/authSlice';
+import { register as registerUser, requestOtp, verifyOtp } from '../../store/slices/authSlice';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
 
 const schema = yup.object({
   firstName: yup
     .string()
-    .required('First name is required')
+    .required('Enter your first name')
     .min(2, 'First name must be at least 2 characters')
     .max(50, 'First name must be less than 50 characters'),
   lastName: yup
     .string()
-    .required('Last name is required')
+    .required('Enter your last name')
     .min(2, 'Last name must be at least 2 characters')
     .max(50, 'Last name must be less than 50 characters'),
   email: yup
     .string()
-    .required('Email is required')
+    .required('Enter your email address')
     .email('Please enter a valid email address'),
   password: yup
     .string()
-    .required('Password is required')
+    .required('Create a password')
     .min(8, 'Password must be at least 8 characters')
     .matches(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
@@ -52,10 +52,14 @@ const schema = yup.object({
 const Register = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { loading, error } = useSelector((state) => state.auth);
+  const { isLoading, error } = useSelector((state) => state.auth);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
+  const [step, setStep] = useState('form');
+  const [otpCode, setOtpCode] = useState('');
+  const [emailValue, setEmailValue] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const {
     register,
@@ -86,21 +90,47 @@ const Register = () => {
 
   const onSubmit = async (data) => {
     try {
-      const result = await dispatch(registerUser({
+      await dispatch(registerUser({
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
         password: data.password,
-      }));
+      })).unwrap();
 
-      if (registerUser.fulfilled.match(result)) {
-        // Since email verification is disabled, redirect directly to dashboard
-        navigate('/');
-      }
+      setEmailValue(data.email);
+      setStep('otp');
+      setResendCooldown(60);
     } catch (error) {
       console.error('Registration error:', error);
     }
   };
+
+  const handleVerifyOtp = async () => {
+    try {
+      await dispatch(verifyOtp({ email: emailValue, purpose: 'register', code: otpCode })).unwrap();
+      navigate('/onboarding/investment-profile');
+    } catch (e) {
+      // slice handles toast
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || !emailValue) return;
+    try {
+      await dispatch(requestOtp({ email: emailValue, purpose: 'register' })).unwrap();
+      setResendCooldown(60);
+    } catch (e) {
+      // slice handles toast
+    }
+  };
+
+  useEffect(() => {
+    let interval;
+    if (resendCooldown > 0) {
+      interval = setInterval(() => setResendCooldown((v) => v - 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
 
   const getPasswordStrengthColor = () => {
     if (passwordStrength <= 2) return 'bg-danger-500';
@@ -145,15 +175,27 @@ const Register = () => {
             </svg>
           </div>
           <h2 className="mt-6 text-3xl font-bold text-secondary-900">
-            Create your account
+            {step === 'otp' ? 'Verify your email' : 'Create your account'}
           </h2>
           <p className="mt-2 text-sm text-secondary-600">
-            Join PFIMS to take control of your finances
+            {step === 'otp'
+              ? `Enter the OTP sent to ${emailValue || 'your email'}`
+              : 'Join PFIMS to take control of your finances'}
           </p>
         </div>
 
         {/* Form */}
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
+        <form
+          className="mt-8 space-y-6"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (step === 'form') {
+              handleSubmit(onSubmit)(e);
+            } else {
+              handleVerifyOtp();
+            }
+          }}
+        >
           {/* Error message */}
           {error && (
             <div className="bg-danger-50 border border-danger-200 rounded-lg p-4">
@@ -166,7 +208,8 @@ const Register = () => {
             </div>
           )}
 
-          <div className="space-y-4">
+          {step === 'form' ? (
+            <div className="space-y-4">
             {/* Name fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -418,19 +461,63 @@ const Register = () => {
                 {errors.acceptTerms.message}
               </p>
             )}
-          </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="otp" className="sr-only">
+                  OTP
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <LockClosedIcon className="h-5 w-5 text-secondary-400" />
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-3 border rounded-lg text-secondary-900 placeholder-secondary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 sm:text-sm border-secondary-300"
+                    placeholder="Enter OTP"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('form');
+                    setOtpCode('');
+                  }}
+                  className="text-sm font-medium text-secondary-600 hover:text-secondary-800 transition-colors"
+                >
+                  Edit details
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={resendCooldown > 0}
+                  className="text-sm font-medium text-primary-600 hover:text-primary-500 transition-colors disabled:opacity-50"
+                >
+                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Submit button */}
           <div>
             <button
               type="submit"
-              disabled={loading || !isValid}
+              disabled={step === 'form' ? isLoading || !isValid : isLoading || !otpCode}
               className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? (
+              {isLoading ? (
                 <LoadingSpinner size="sm" />
               ) : (
-                'Create Account'
+                step === 'form' ? 'Create Account' : 'Verify OTP'
               )}
             </button>
           </div>

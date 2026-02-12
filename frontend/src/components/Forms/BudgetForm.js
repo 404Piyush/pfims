@@ -91,29 +91,29 @@ const BudgetForm = ({
     const newErrors = {};
 
     if (!formData.name.trim()) {
-      newErrors.name = 'Budget name is required';
+      newErrors.name = 'Add a budget name (e.g., Monthly Expenses)';
     }
 
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      newErrors.amount = 'Amount must be greater than 0';
+      newErrors.amount = 'Enter an amount greater than 0';
     }
 
     if (!formData.category) {
-      newErrors.category = 'Category is required';
+      newErrors.category = 'Choose a category for this budget';
     }
 
     if (!formData.startDate) {
-      newErrors.startDate = 'Start date is required';
+      newErrors.startDate = 'Pick a start date for this budget period';
     }
 
     if (!formData.endDate) {
-      newErrors.endDate = 'End date is required';
+      newErrors.endDate = 'Pick an end date for this budget period';
     } else if (new Date(formData.endDate) <= new Date(formData.startDate)) {
       newErrors.endDate = 'End date must be after start date';
     }
 
     if (formData.alertThreshold < 0 || formData.alertThreshold > 100) {
-      newErrors.alertThreshold = 'Alert threshold must be between 0 and 100';
+      newErrors.alertThreshold = 'Set an alert threshold between 0 and 100';
     }
 
     setErrors(newErrors);

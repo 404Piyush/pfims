@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const chatMessageSchema = new mongoose.Schema({
   role: { type: String, enum: ['user', 'assistant', 'system'], required: true },
-  content: { type: String, required: true, maxlength: 4000 },
+  content: { type: String, required: true, maxlength: 30000 },
   createdAt: { type: Date, default: Date.now }
 }, { _id: false });
 

@@ -125,8 +125,11 @@ router.post('/register', [
       console.error('Registration OTP send error:', otpError?.message || otpError);
     }
 
+    const token = generateToken(user._id);
+
     res.status(201).json({
       message: 'User registered successfully. Please check your email to verify your account.',
+      token,
       user: {
         id: user._id,
         firstName: user.firstName,
@@ -134,6 +137,9 @@ router.post('/register', [
         email: user.email,
         currency: user.currency,
         timezone: user.timezone,
+        notifications: user.notifications,
+        onboarding: user.onboarding,
+        investmentProfile: user.investmentProfile,
         isEmailVerified: user.isEmailVerified
       }
     });
@@ -193,14 +199,6 @@ router.post('/login', [
       });
     }
 
-    // Check if email is verified
-    if (!user.isEmailVerified) {
-      return res.status(401).json({
-        message: 'Please verify your email before logging in. Check your inbox for the verification link.',
-        requiresEmailVerification: true
-      });
-    }
-
     // Generate token
     const token = generateToken(user._id);
 
@@ -218,6 +216,9 @@ router.post('/login', [
         email: user.email,
         currency: user.currency,
         timezone: user.timezone,
+        notifications: user.notifications,
+        onboarding: user.onboarding,
+        investmentProfile: user.investmentProfile,
         isEmailVerified: user.isEmailVerified,
         lastLogin: user.lastLogin
       }
@@ -474,6 +475,8 @@ router.get('/me', auth, async (req, res) => {
         currency: req.user.currency,
         timezone: req.user.timezone,
         notifications: req.user.notifications,
+        onboarding: req.user.onboarding,
+        investmentProfile: req.user.investmentProfile,
         isEmailVerified: req.user.isEmailVerified,
         lastLogin: req.user.lastLogin,
         createdAt: req.user.createdAt

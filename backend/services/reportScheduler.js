@@ -42,7 +42,17 @@ const sendWeeklyReports = async () => {
   for (const user of users) {
     try {
       const report = await buildReportForUser(user, start, now);
-      await emailService.sendReportEmail(user, report, 'weekly');
+      const xlsxBuffer = await emailService.generateReportXlsxBuffer(user, report, 'weekly');
+      const fileName = `pfims_weekly_report_${now.toISOString().slice(0, 10)}.xlsx`;
+      await emailService.sendReportEmail(user, report, 'weekly', {
+        attachments: [
+          {
+            filename: fileName,
+            content: xlsxBuffer,
+            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          }
+        ]
+      });
       console.log(`Weekly report sent to ${user.email}`);
     } catch (err) {
       console.error(`Failed to send weekly report to ${user.email}:`, err?.message || err);

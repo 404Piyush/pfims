@@ -118,15 +118,16 @@ budgetSchema.index({ user: 1, isActive: 1, startDate: -1 });
 budgetSchema.index({ user: 1, endDate: 1 });
 
 // Validation: endDate must be after startDate
-budgetSchema.pre('save', function(next) {
-  if (this.endDate <= this.startDate) {
+budgetSchema.pre('validate', function(next) {
+  if (this.endDate && this.startDate && this.endDate <= this.startDate) {
     const error = new Error('End date must be after start date');
     return next(error);
   }
-  
-  // Calculate total budget from categories
-  this.totalBudget = this.categories.reduce((total, cat) => total + cat.budgetAmount, 0);
-  
+
+  this.totalBudget = Array.isArray(this.categories)
+    ? this.categories.reduce((total, cat) => total + (cat.budgetAmount || 0), 0)
+    : 0;
+
   next();
 });
 
@@ -165,33 +166,45 @@ budgetSchema.virtual('status').get(function() {
 // Method to update spent amounts
 budgetSchema.methods.updateSpentAmounts = async function() {
   const Transaction = mongoose.model('Transaction');
-  
-  // Get all transactions for this budget period
-  const transactions = await Transaction.find({
-    user: this.user,
-    type: 'expense',
-    date: { $gte: this.startDate, $lte: this.endDate }
-  }).populate('category');
-  
-  // Reset spent amounts
-  this.categories.forEach(cat => {
-    cat.spentAmount = 0;
+
+  const categoryIds = (Array.isArray(this.categories) ? this.categories : [])
+    .map(cat => (cat?.category?._id ? cat.category._id : cat?.category))
+    .filter(Boolean);
+
+  const spendingByCategory = categoryIds.length
+    ? await Transaction.aggregate([
+        {
+          $match: {
+            user: this.user,
+            type: 'expense',
+            status: 'completed',
+            category: { $in: categoryIds },
+            date: { $gte: this.startDate, $lte: this.endDate }
+          }
+        },
+        {
+          $group: {
+            _id: '$category',
+            total: { $sum: '$amount' }
+          }
+        }
+      ])
+    : [];
+
+  const totalsById = new Map(
+    spendingByCategory.map(row => [row._id.toString(), row.total || 0])
+  );
+
+  let totalSpent = 0;
+  (Array.isArray(this.categories) ? this.categories : []).forEach(cat => {
+    const categoryId = cat?.category?._id ? cat.category._id : cat?.category;
+    const spentAmount = categoryId ? (totalsById.get(categoryId.toString()) || 0) : 0;
+    cat.spentAmount = spentAmount;
+    totalSpent += spentAmount;
   });
-  
-  // Calculate spent amounts by category
-  transactions.forEach(transaction => {
-    const budgetCategory = this.categories.find(
-      cat => cat.category._id.toString() === transaction.category._id.toString()
-    );
-    
-    if (budgetCategory) {
-      budgetCategory.spentAmount += transaction.amount;
-    }
-  });
-  
-  // Update total spent
-  this.totalSpent = this.categories.reduce((total, cat) => total + cat.spentAmount, 0);
-  
+
+  this.totalSpent = totalSpent;
+
   return this.save();
 };
 

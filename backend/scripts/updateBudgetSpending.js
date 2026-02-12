@@ -1,29 +1,47 @@
 const mongoose = require('mongoose');
+require('dotenv').config({ path: '../.env' });
 const User = require('../models/User');
 const Budget = require('../models/Budget');
-const Category = require('../models/Category');
-const Transaction = require('../models/Transaction');
 
-// Connect to MongoDB
-mongoose.connect('mongodb://localhost:27017/pfims', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+function getArg(name, defaultVal) {
+  const prefix = `--${name}`;
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === prefix) {
+      const next = argv[i + 1];
+      if (next && !next.startsWith('--')) return next;
+      return true;
+    }
+    if (arg.startsWith(prefix + '=')) {
+      return arg.split('=')[1];
+    }
+  }
+  return defaultVal;
+}
 
 async function updateBudgetSpending() {
   try {
-    console.log('🔄 Updating budget spending for piyush@gmail.com...\n');
+    const email = getArg('email', process.env.SEED_EMAIL || 'piyush@gmail.com');
+    const budgetId = getArg('budgetId', null);
+
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pfims');
+    console.log('✅ Connected to MongoDB');
+
+    console.log(`\n🔄 Updating budget spending for ${email}...\n`);
 
     // Find the user
-    const user = await User.findOne({ email: 'piyush@gmail.com' });
+    const user = await User.findOne({ email });
     if (!user) {
-      console.log('❌ User piyush@gmail.com not found!');
+      console.log(`❌ User ${email} not found!`);
       return;
     }
     console.log('✅ User found:', user.email);
 
     // Find all budgets for the user
-    const budgets = await Budget.find({ user: user._id }).populate('categories.category');
+    const filter = { user: user._id };
+    if (budgetId) filter._id = budgetId;
+    const budgets = await Budget.find(filter);
     console.log(`📊 Found ${budgets.length} budgets to update\n`);
 
     for (let i = 0; i < budgets.length; i++) {
@@ -52,7 +70,8 @@ async function updateBudgetSpending() {
   } catch (error) {
     console.error('❌ Error updating budget spending:', error);
   } finally {
-    mongoose.connection.close();
+    await mongoose.disconnect();
+    console.log('\n🔌 Disconnected from MongoDB');
   }
 }
 

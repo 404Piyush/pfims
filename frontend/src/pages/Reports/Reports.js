@@ -1,116 +1,193 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { format, startOfMonth, endOfMonth, subMonths, parseISO, startOfYear, endOfYear, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, parseISO, startOfYear, endOfYear } from 'date-fns';
 import {
   ChartBarIcon,
   CurrencyDollarIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
-  CalendarIcon,
   DocumentArrowDownIcon,
-  FunnelIcon,
   ArrowPathIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/24/outline';
-import { fetchTransactions, fetchAnalyticsSummary } from '../../store/slices/transactionSlice';
 import { fetchCategories } from '../../store/slices/categorySlice';
-import { fetchBudgets } from '../../store/slices/budgetSlice';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
+import api from '../../services/api';
+import { toast } from 'react-hot-toast';
 
 const Reports = () => {
   const dispatch = useDispatch();
-  const { transactions, loading, analyticsSummary, analyticsError, listSummary } = useSelector((state) => state.transactions);
   const { categories } = useSelector((state) => state.categories);
-  const { budgets } = useSelector((state) => state.budgets);
+  const [allTransactions, setAllTransactions] = useState([]);
+  const [allBudgets, setAllBudgets] = useState([]);
+  const [loading, setLoading] = useState(true);
   
   // State for date range and filters
   const [dateRange, setDateRange] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [reportType, setReportType] = useState('overview');
+  const [reportType] = useState('overview');
   const [customDateFrom, setCustomDateFrom] = useState('');
   const [customDateTo, setCustomDateTo] = useState('');
+  const [isSendingWeekly, setIsSendingWeekly] = useState(false);
+  const [isSendingMonthly, setIsSendingMonthly] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
-  // Load data on component mount and when filters change
-  useEffect(() => {
-    const { startDate, endDate } = getDateRange();
-    const params = { limit: 100 };
-    if (dateRange !== 'all') {
-      params.startDate = startOfDay(startDate).toISOString();
-      params.endDate = endOfDay(endDate).toISOString();
-    }
-    if (categoryFilter !== 'all') {
-      params.category = categoryFilter;
-    }
-    dispatch(fetchTransactions(params));
-    dispatch(fetchCategories());
-    dispatch(fetchBudgets());
-
-    const summaryParams = mapDateRangeToSummaryParams();
-    if (summaryParams) {
-      dispatch(fetchAnalyticsSummary(summaryParams));
-    }
-  }, [dispatch, dateRange, categoryFilter, customDateFrom, customDateTo]);
-
-  // Get date range based on selection
-  const getDateRange = () => {
+  const getDateRange = useCallback(() => {
     const now = new Date();
     switch (dateRange) {
       case 'thisMonth':
         return { startDate: startOfMonth(now), endDate: endOfMonth(now) };
-      case 'lastMonth':
+      case 'lastMonth': {
         const lastMonth = subMonths(now, 1);
         return { startDate: startOfMonth(lastMonth), endDate: endOfMonth(lastMonth) };
+      }
       case 'thisYear':
         return { startDate: startOfYear(now), endDate: endOfYear(now) };
       case 'custom':
         return {
           startDate: customDateFrom ? parseISO(customDateFrom) : startOfMonth(now),
-          endDate: customDateTo ? parseISO(customDateTo) : endOfMonth(now)
+          endDate: customDateTo ? parseISO(customDateTo) : endOfMonth(now),
         };
       default:
         return { startDate: startOfMonth(now), endDate: endOfMonth(now) };
     }
+  }, [customDateFrom, customDateTo, dateRange]);
+
+  const fetchAllPaginated = useCallback(async (url, params = {}, listPath = ['data', 'transactions']) => {
+    const limit = 100;
+    let page = 1;
+    const all = [];
+
+    while (true) {
+      const res = await api.get(url, { params: { ...params, page, limit } });
+      const payload = res?.data;
+
+      let list = payload;
+      for (const key of listPath) {
+        list = list?.[key];
+      }
+      const pageItems = Array.isArray(list) ? list : [];
+      all.push(...pageItems);
+
+      const pagination = payload?.data?.pagination;
+      if (!pagination?.hasNextPage) break;
+      page += 1;
+    }
+
+    return all;
+  }, []);
+
+  const loadTransactions = useCallback(async () => {
+    const params = { sortBy: 'date', sortOrder: 'desc' };
+    if (dateRange !== 'all') {
+      const { startDate, endDate } = getDateRange();
+      params.startDate = format(startDate, 'yyyy-MM-dd');
+      params.endDate = format(endDate, 'yyyy-MM-dd');
+    }
+    const txns = await fetchAllPaginated('/transactions', params, ['data', 'transactions']);
+    setAllTransactions(txns);
+  }, [dateRange, fetchAllPaginated, getDateRange]);
+
+  const loadBudgets = useCallback(async () => {
+    const budgets = await fetchAllPaginated('/budgets', { status: 'all', sortBy: 'startDate', sortOrder: 'desc' }, ['data', 'budgets']);
+    setAllBudgets(budgets);
+  }, [fetchAllPaginated]);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          dispatch(fetchCategories()),
+          loadBudgets(),
+          loadTransactions(),
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [dispatch, loadBudgets, loadTransactions]);
+
+  const sendWeeklyReport = async () => {
+    if (isSendingWeekly) return;
+    setIsSendingWeekly(true);
+    try {
+      await api.post('/reports/email/weekly');
+      toast.success('Weekly report sent to your email');
+    } catch (e) {
+      const message = e?.response?.data?.message || e?.message || 'Failed to send weekly report';
+      toast.error(message);
+    } finally {
+      setIsSendingWeekly(false);
+    }
   };
 
-  // Map UI date range selection to analytics summary API params
-  const mapDateRangeToSummaryParams = () => {
-    const now = new Date();
-    switch (dateRange) {
-      case 'thisMonth': {
-        return { period: 'month' };
-      }
-      case 'lastMonth': {
-        const lastMonth = subMonths(now, 1);
-        const startDate = startOfMonth(lastMonth);
-        const endDate = endOfMonth(lastMonth);
-        return {
-          period: 'custom',
-          startDate: startOfDay(startDate).toISOString(),
-          endDate: endOfDay(endDate).toISOString()
-        };
-      }
-      case 'thisYear': {
-        return { period: 'year' };
-      }
-      case 'custom': {
-        if (!customDateFrom || !customDateTo) return null;
-        const startDate = parseISO(customDateFrom);
-        const endDate = parseISO(customDateTo);
-        return {
-          period: 'custom',
-          startDate: startOfDay(startDate).toISOString(),
-          endDate: endOfDay(endDate).toISOString()
-        };
-      }
-      default:
-        return null; // 'all' => skip summary, use client-side fallback
+  const sendMonthlyReport = async () => {
+    if (isSendingMonthly) return;
+    setIsSendingMonthly(true);
+    try {
+      await api.post('/reports/email/monthly');
+      toast.success('Monthly report sent to your email');
+    } catch (e) {
+      const message = e?.response?.data?.message || e?.message || 'Failed to send monthly report';
+      toast.error(message);
+    } finally {
+      setIsSendingMonthly(false);
+    }
+  };
+
+  const exportReport = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const { startDate, endDate } = getDateRange();
+      const payload = {
+        generatedAt: new Date().toISOString(),
+        filters: {
+          dateRange,
+          categoryFilter,
+          reportType,
+          customDateFrom,
+          customDateTo,
+        },
+        periodRange: {
+          start: startDate?.toISOString?.() || null,
+          end: endDate?.toISOString?.() || null,
+        },
+        metrics,
+        categorySpending,
+        budgetPerformance,
+        monthlyTrends,
+        transactionCount: filteredTransactions.length,
+      };
+
+      const json = JSON.stringify(payload, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `pfims_report_${format(new Date(), 'yyyy-MM-dd')}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      toast.success('Report exported');
+    } catch (e) {
+      toast.error('Failed to export report');
+    } finally {
+      setIsExporting(false);
     }
   };
 
   // Filter transactions based on current filters
-  const filteredTransactions = Array.isArray(transactions) ? transactions.filter(transaction => {
+  const filteredTransactions = Array.isArray(allTransactions) ? allTransactions.filter(transaction => {
     // For "all" date range, don't filter by date
     if (dateRange === 'all') {
-      const inCategory = categoryFilter === 'all' || transaction.category?._id === categoryFilter;
+      const categoryId = transaction.category?._id || transaction.category;
+      const inCategory = categoryFilter === 'all' || categoryId === categoryFilter;
       return inCategory;
     }
     
@@ -118,7 +195,8 @@ const Reports = () => {
     const { startDate, endDate } = getDateRange();
     const transactionDate = parseISO(transaction.date);
     const inDateRange = transactionDate >= startDate && transactionDate <= endDate;
-    const inCategory = categoryFilter === 'all' || transaction.category?._id === categoryFilter;
+    const categoryId = transaction.category?._id || transaction.category;
+    const inCategory = categoryFilter === 'all' || categoryId === categoryFilter;
     return inDateRange && inCategory;
   }) : [];
 
@@ -199,50 +277,39 @@ const Reports = () => {
 
   // Get budget performance
   const getBudgetPerformance = () => {
-    return Array.isArray(budgets) ? budgets.map(budget => {
-      // Prefer backend-provided metrics when available
-      const totalBudgetAmount = (budget.totalBudget ?? budget.amount ?? 0);
-      const spentFromBackend = (budget.totalSpent ?? budget.spent ?? null);
-      const utilizationFromBackend = budget.utilizationPercentage ?? null;
+    return Array.isArray(allBudgets) ? allBudgets.map(budget => {
+      // Calculate total budget amount from all categories
+      const totalBudgetAmount = Array.isArray(budget.categories) 
+        ? budget.categories.reduce((sum, cat) => sum + (cat.budgetAmount || 0), 0)
+        : (budget.totalBudget || budget.amount || 0);
       
-      let spent = typeof spentFromBackend === 'number' ? spentFromBackend : 0;
-      let percentage = typeof utilizationFromBackend === 'number' ? utilizationFromBackend : 0;
+      // Get category IDs for this budget
+      const budgetCategoryIds = Array.isArray(budget.categories) 
+        ? budget.categories.map(cat => cat.category?._id || cat.category)
+        : [budget.category?._id || budget.category].filter(Boolean);
       
-      // Fallback: compute from transactions only if backend metrics are missing
-      if (spentFromBackend == null || utilizationFromBackend == null) {
-        const budgetCategoryIds = Array.isArray(budget.categories) 
-          ? budget.categories.map(cat => cat.category?._id || cat.category)
-          : [budget.category?._id || budget.category].filter(Boolean);
-
-        const budgetTransactions = filteredTransactions.filter(transaction => {
-          const transactionDate = parseISO(transaction.date);
-          const categoryId = transaction.category?._id || transaction.category;
-          return (
-            budgetCategoryIds.includes(categoryId) &&
-            transaction.type === 'expense' &&
-            transactionDate >= parseISO(budget.startDate) &&
-            transactionDate <= parseISO(budget.endDate)
-          );
-        });
-
-        spent = budgetTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
-        percentage = totalBudgetAmount > 0 ? (spent / totalBudgetAmount) * 100 : 0;
-      }
+      // Filter transactions for this budget's categories and period
+      const budgetTransactions = filteredTransactions.filter(transaction => {
+        const transactionDate = parseISO(transaction.date);
+        const categoryId = transaction.category?._id || transaction.category;
+        return (
+          budgetCategoryIds.includes(categoryId) &&
+          transaction.type === 'expense' &&
+          transactionDate >= parseISO(budget.startDate) &&
+          transactionDate <= parseISO(budget.endDate)
+        );
+      });
       
-      const remaining = totalBudgetAmount - spent;
-      const statusFromBackend = budget.budgetStatus;
-      const status = (statusFromBackend === 'over_budget' || percentage >= 100)
-        ? 'exceeded'
-        : (statusFromBackend === 'near_limit' || percentage >= 80)
-          ? 'warning'
-          : 'on-track';
+      const spent = budgetTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+      const percentage = totalBudgetAmount > 0 ? (spent / totalBudgetAmount) * 100 : 0;
       
       return {
         ...budget,
         spent: isNaN(spent) ? 0 : spent,
         percentage: isNaN(percentage) ? 0 : percentage,
-        remaining: isNaN(remaining) ? totalBudgetAmount : remaining,
-        amount: totalBudgetAmount
+        remaining: isNaN(totalBudgetAmount - spent) ? totalBudgetAmount : totalBudgetAmount - spent,
+        amount: totalBudgetAmount, // Add this for display consistency
+        status: percentage >= 100 ? 'exceeded' : percentage >= 80 ? 'warning' : 'on-track'
       };
     }) : [];
   };
@@ -254,60 +321,12 @@ const Reports = () => {
     }).format(amount);
   };
 
-  const metrics = (() => {
-    if (dateRange !== 'all' && analyticsSummary) {
-      const income = analyticsSummary.totalIncome || 0;
-      const expenses = analyticsSummary.totalExpense || 0;
-      const netIncome = (analyticsSummary.netIncome ?? (income - expenses));
-      const savingsRate = income > 0 ? ((netIncome / income) * 100) : 0;
-      return { income, expenses, netIncome, savingsRate: isNaN(savingsRate) ? 0 : savingsRate };
-    }
-    if (dateRange === 'all' && listSummary) {
-      const income = listSummary.totalIncome || 0;
-      const expenses = listSummary.totalExpense || 0;
-      const netIncome = income - expenses;
-      const savingsRate = income > 0 ? ((netIncome / income) * 100) : 0;
-      return { income, expenses, netIncome, savingsRate: isNaN(savingsRate) ? 0 : savingsRate };
-    }
-    return calculateMetrics();
-  })();
-
-  const categorySpending = (analyticsSummary && dateRange !== 'all')
-    ? (analyticsSummary.categories?.expense || []).map(cat => ({
-        name: cat.name,
-        amount: cat.totalAmount || 0,
-        color: cat.color || '#6B7280',
-        transactions: cat.transactionCount || 0
-      }))
-    : getSpendingByCategory();
-
-  const transformMonthlyTrendsFromSummary = (monthlyData = []) => {
-    const byMonth = {};
-    monthlyData.forEach(entry => {
-      const year = entry._id?.year;
-      const month = entry._id?.month; // 1-12
-      const type = entry._id?.type;
-      const amount = entry.amount || 0;
-      if (year && month) {
-        const dateObj = new Date(year, month - 1, 1);
-        const key = format(dateObj, 'MMM yyyy');
-        if (!byMonth[key]) byMonth[key] = { income: 0, expenses: 0 };
-        if (type === 'income') byMonth[key].income += amount;
-        else if (type === 'expense') byMonth[key].expenses += amount;
-      }
-    });
-    return Object.entries(byMonth)
-      .map(([month, data]) => ({ month, income: data.income, expenses: data.expenses, net: data.income - data.expenses }))
-      .sort((a, b) => new Date(a.month) - new Date(b.month));
-  };
-
-  const monthlyTrends = (analyticsSummary && dateRange === 'thisYear')
-    ? transformMonthlyTrendsFromSummary(analyticsSummary.trends?.monthlyData || [])
-    : getMonthlyTrends();
-
+  const metrics = calculateMetrics();
+  const categorySpending = getSpendingByCategory();
+  const monthlyTrends = getMonthlyTrends();
   const budgetPerformance = getBudgetPerformance();
 
-  if (loading && transactions.length === 0) {
+  if (loading && allTransactions.length === 0) {
     return <LoadingSpinner />;
   }
 
@@ -319,27 +338,25 @@ const Reports = () => {
           <h1 className="text-2xl font-bold text-secondary-900">Reports & Analytics</h1>
           <p className="text-secondary-600">Comprehensive financial insights and trends</p>
         </div>
-        <div className="flex items-center space-x-3">
-          <button className="btn-secondary flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <button onClick={exportReport} className="btn-secondary flex items-center space-x-2" disabled={isExporting}>
             <DocumentArrowDownIcon className="h-4 w-4" />
             <span>Export</span>
           </button>
+          <button onClick={sendWeeklyReport} className="btn-secondary flex items-center space-x-2" disabled={isSendingWeekly}>
+            <EnvelopeIcon className="h-4 w-4" />
+            <span>Send Weekly</span>
+          </button>
+          <button onClick={sendMonthlyReport} className="btn-secondary flex items-center space-x-2" disabled={isSendingMonthly}>
+            <EnvelopeIcon className="h-4 w-4" />
+            <span>Send Monthly</span>
+          </button>
           <button 
             onClick={() => {
-              const { startDate, endDate } = getDateRange();
-              const params = {
-                limit: 100,
-                startDate: startOfDay(startDate).toISOString(),
-                endDate: endOfDay(endDate).toISOString()
-              };
-              if (categoryFilter !== 'all') {
-                params.category = categoryFilter;
-              }
-              dispatch(fetchTransactions(params));
-              const summaryParams = mapDateRangeToSummaryParams();
-              if (summaryParams) {
-                dispatch(fetchAnalyticsSummary(summaryParams));
-              }
+              setLoading(true);
+              loadTransactions()
+                .catch(() => {})
+                .finally(() => setLoading(false));
             }}
             className="btn-primary flex items-center space-x-2"
           >
@@ -348,29 +365,6 @@ const Reports = () => {
           </button>
         </div>
       </div>
-
-      {/* Analytics summary fallback */}
-      {analyticsError && dateRange !== 'all' && (
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-4">
-          <div className="flex items-start justify-between">
-            <div className="flex-1 pr-4">
-              <p className="font-medium">Analytics summary is unavailable.</p>
-              <p className="text-sm">Showing locally computed metrics from transactions. You can retry fetching the summary.</p>
-            </div>
-            <button
-              onClick={() => {
-                const summaryParams = mapDateRangeToSummaryParams();
-                if (summaryParams) {
-                  dispatch(fetchAnalyticsSummary(summaryParams));
-                }
-              }}
-              className="btn-secondary"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-6">
@@ -502,7 +496,7 @@ const Reports = () => {
         <div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-6">
           <h3 className="text-lg font-semibold text-secondary-900 mb-6">Spending by Category</h3>
           <div className="space-y-4">
-            {categorySpending.slice(0, 8).map((category, index) => {
+            {categorySpending.map((category) => {
               const percentage = metrics.expenses > 0 ? (category.amount / metrics.expenses) * 100 : 0;
               return (
                 <div key={category.name} className="flex items-center justify-between">
@@ -549,7 +543,7 @@ const Reports = () => {
         <div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-6">
           <h3 className="text-lg font-semibold text-secondary-900 mb-6">Budget Performance</h3>
           <div className="space-y-4">
-            {budgetPerformance.slice(0, 6).map((budget) => (
+            {budgetPerformance.map((budget) => (
               <div key={budget._id} className="border border-secondary-100 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-secondary-900">{budget.name}</span>
@@ -606,7 +600,7 @@ const Reports = () => {
                 </tr>
               </thead>
               <tbody>
-                {monthlyTrends.map((month, index) => (
+                {monthlyTrends.map((month) => (
                   <tr key={month.month} className="border-b border-secondary-100">
                     <td className="py-3 px-4 text-secondary-900">{month.month}</td>
                     <td className="py-3 px-4 text-right text-success-600 font-medium">
@@ -650,6 +644,59 @@ const Reports = () => {
             </div>
             <div className="text-sm text-secondary-600">Expense Transactions</div>
           </div>
+        </div>
+      </div>
+
+      {/* Transactions */}
+      <div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-secondary-900">All Transactions</h3>
+          <div className="text-sm text-secondary-600">
+            {filteredTransactions.length} total
+          </div>
+        </div>
+
+        <div className="overflow-x-auto max-h-[36rem] overflow-y-auto">
+          <table className="min-w-full">
+            <thead className="sticky top-0 bg-white">
+              <tr className="border-b border-secondary-200">
+                <th className="text-left py-3 px-4 font-medium text-secondary-900">Date</th>
+                <th className="text-left py-3 px-4 font-medium text-secondary-900">Title</th>
+                <th className="text-left py-3 px-4 font-medium text-secondary-900">Category</th>
+                <th className="text-left py-3 px-4 font-medium text-secondary-900">Type</th>
+                <th className="text-right py-3 px-4 font-medium text-secondary-900">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTransactions.map((t) => {
+                const id = t?._id || t?.id;
+                const date = t?.date ? format(parseISO(t.date), 'yyyy-MM-dd') : '';
+                const title = t?.title || t?.description || '';
+                const category = t?.category?.name || t?.category || 'Uncategorized';
+                const type = t?.type;
+                const amount = Number(t?.amount || 0);
+                const amountClass = type === 'income' ? 'text-success-600' : type === 'expense' ? 'text-danger-600' : 'text-secondary-700';
+                return (
+                  <tr key={String(id)} className="border-b border-secondary-100">
+                    <td className="py-3 px-4 text-secondary-700 whitespace-nowrap">{date}</td>
+                    <td className="py-3 px-4 text-secondary-900">{title}</td>
+                    <td className="py-3 px-4 text-secondary-700 whitespace-nowrap">{category}</td>
+                    <td className="py-3 px-4 text-secondary-700 whitespace-nowrap">{type}</td>
+                    <td className={`py-3 px-4 text-right font-medium whitespace-nowrap ${amountClass}`}>
+                      {formatCurrency(amount)}
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredTransactions.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-secondary-600">
+                    No transactions found for the selected filters
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

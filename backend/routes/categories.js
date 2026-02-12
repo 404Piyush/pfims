@@ -12,6 +12,14 @@ const router = express.Router();
 // @desc    Get user categories with filtering and optimization
 // @access  Private
 router.get('/', [
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer'),
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Limit must be between 1 and 100'),
   query('type')
     .optional()
     .isIn(['income', 'expense', 'both', 'all'])
@@ -20,6 +28,14 @@ router.get('/', [
     .optional()
     .isBoolean()
     .withMessage('includeInactive must be a boolean'),
+  query('includeTree')
+    .optional()
+    .isBoolean()
+    .withMessage('includeTree must be a boolean'),
+  query('includeSummary')
+    .optional()
+    .isBoolean()
+    .withMessage('includeSummary must be a boolean'),
   query('parent')
     .optional()
     .custom(value => value === 'null' || require('mongoose').Types.ObjectId.isValid(value))
@@ -46,12 +62,23 @@ router.get('/', [
     const { 
       type = 'all', 
       includeInactive = false, 
+      page,
+      limit,
+      includeTree,
+      includeSummary,
       parent,
       search,
       includeStats = true,
       sortBy = 'order',
       sortOrder = 'asc'
     } = req.query;
+
+    const isPaginated = page !== undefined || limit !== undefined;
+    const currentPage = parseInt(page || '1', 10);
+    const itemsPerPage = parseInt(limit || '50', 10);
+
+    const includeTreeEnabled = includeTree === undefined ? !isPaginated : includeTree === 'true';
+    const includeSummaryEnabled = includeSummary === undefined ? !isPaginated : includeSummary === 'true';
 
     // Build optimized query filter
     const filter = QueryOptimizer.buildCategoryQuery(req.user._id, {
@@ -64,11 +91,20 @@ router.get('/', [
     // Build sort options
     const sortOptions = QueryOptimizer.buildSortOptions(sortBy, sortOrder);
 
-    // Execute main query
-    const categories = await Category.find(filter)
+    let categoriesQuery = Category.find(filter)
       .populate('parent', 'name color icon type')
-      .sort(sortOptions)
-      .lean();
+      .sort(sortOptions);
+
+    if (isPaginated) {
+      categoriesQuery = categoriesQuery
+        .limit(itemsPerPage)
+        .skip((currentPage - 1) * itemsPerPage);
+    }
+
+    const [categories, total] = await Promise.all([
+      categoriesQuery.lean(),
+      isPaginated ? Category.countDocuments(filter) : Promise.resolve(null)
+    ]);
 
     let categoriesWithData = categories;
 
@@ -115,53 +151,104 @@ router.get('/', [
       });
     }
 
-    // Build category tree structure for hierarchical display
-    const categoryTree = await Category.aggregate([
-      {
-        $match: filter
-      },
-      {
-        $lookup: {
-          from: 'categories',
-          localField: '_id',
-          foreignField: 'parent',
-          as: 'children'
-        }
-      },
-      {
-        $match: {
-          parent: null // Only root categories for tree structure
-        }
-      },
-      {
-        $sort: sortOptions
-      }
-    ]);
-
-    // Calculate summary statistics
-    const summary = {
-      totalCategories: categories.length,
-      activeCategories: categories.filter(cat => cat.isActive).length,
-      inactiveCategories: categories.filter(cat => !cat.isActive).length,
-      incomeCategories: categories.filter(cat => cat.type === 'income' || cat.type === 'both').length,
-      expenseCategories: categories.filter(cat => cat.type === 'expense' || cat.type === 'both').length,
-      parentCategories: categories.filter(cat => !cat.parent).length,
-      subcategories: categories.filter(cat => cat.parent).length
+    const data = {
+      categories: categoriesWithData
     };
 
-    if (includeStats === 'true') {
-      summary.categoriesWithTransactions = categoriesWithData.filter(cat => cat.hasTransactions).length;
-      summary.totalTransactionAmount = categoriesWithData.reduce((sum, cat) => sum + (cat.totalAmount || 0), 0);
+    if (includeTreeEnabled) {
+      data.categoryTree = await Category.aggregate([
+        {
+          $match: filter
+        },
+        {
+          $lookup: {
+            from: 'categories',
+            localField: '_id',
+            foreignField: 'parent',
+            as: 'children'
+          }
+        },
+        {
+          $match: {
+            parent: null
+          }
+        },
+        {
+          $sort: sortOptions
+        }
+      ]);
+    }
+
+    if (includeSummaryEnabled) {
+      if (isPaginated) {
+        const [summaryAgg] = await Category.aggregate([
+          { $match: filter },
+          {
+            $group: {
+              _id: null,
+              totalCategories: { $sum: 1 },
+              activeCategories: { $sum: { $cond: ['$isActive', 1, 0] } },
+              inactiveCategories: { $sum: { $cond: ['$isActive', 0, 1] } },
+              incomeCategories: { $sum: { $cond: [{ $in: ['$type', ['income', 'both']] }, 1, 0] } },
+              expenseCategories: { $sum: { $cond: [{ $in: ['$type', ['expense', 'both']] }, 1, 0] } },
+              parentCategories: { $sum: { $cond: [{ $eq: ['$parent', null] }, 1, 0] } },
+              subcategories: { $sum: { $cond: [{ $ne: ['$parent', null] }, 1, 0] } }
+            }
+          }
+        ]);
+
+        data.summary = summaryAgg ? {
+          totalCategories: summaryAgg.totalCategories,
+          activeCategories: summaryAgg.activeCategories,
+          inactiveCategories: summaryAgg.inactiveCategories,
+          incomeCategories: summaryAgg.incomeCategories,
+          expenseCategories: summaryAgg.expenseCategories,
+          parentCategories: summaryAgg.parentCategories,
+          subcategories: summaryAgg.subcategories
+        } : {
+          totalCategories: 0,
+          activeCategories: 0,
+          inactiveCategories: 0,
+          incomeCategories: 0,
+          expenseCategories: 0,
+          parentCategories: 0,
+          subcategories: 0
+        };
+      } else {
+        const summary = {
+          totalCategories: categories.length,
+          activeCategories: categories.filter(cat => cat.isActive).length,
+          inactiveCategories: categories.filter(cat => !cat.isActive).length,
+          incomeCategories: categories.filter(cat => cat.type === 'income' || cat.type === 'both').length,
+          expenseCategories: categories.filter(cat => cat.type === 'expense' || cat.type === 'both').length,
+          parentCategories: categories.filter(cat => !cat.parent).length,
+          subcategories: categories.filter(cat => cat.parent).length
+        };
+
+        if (includeStats === 'true') {
+          summary.categoriesWithTransactions = categoriesWithData.filter(cat => cat.hasTransactions).length;
+          summary.totalTransactionAmount = categoriesWithData.reduce((sum, cat) => sum + (cat.totalAmount || 0), 0);
+        }
+
+        data.summary = summary;
+      }
+    }
+
+    if (isPaginated) {
+      data.pagination = {
+        currentPage,
+        totalPages: Math.ceil(total / itemsPerPage),
+        totalItems: total,
+        itemsPerPage,
+        hasNextPage: currentPage < Math.ceil(total / itemsPerPage),
+        hasPrevPage: currentPage > 1
+      };
     }
 
     res.json({
       success: true,
       message: 'Categories retrieved successfully',
-      data: {
-        categories: categoriesWithData,
-        categoryTree: categoryTree,
-        summary
-      }
+      data
     });
 
   } catch (error) {

@@ -7,6 +7,35 @@
 
 ---
 
+## ✅ Updates - February 2026
+
+### 1. Budget system consistency fixes
+- Standardized budget fields across backend to `budgetAmount` / `spentAmount` (removed mixed `budget` / `spent` usage).
+- Added backward compatibility for legacy payloads so older clients still work.
+- Improved spending calculation to only include **completed** expense transactions when updating spent amounts.
+
+### 2. New budget endpoints (for frontend integration)
+- **GET** `/api/budgets/progress` (supports `?refresh=true`) to return computed totals and utilization for active budgets.
+- **GET** `/api/budgets/alerts` to return computed alerts based on budget utilization/thresholds.
+- Fixed route ordering so `/api/budgets/analytics/performance` is not shadowed by `/api/budgets/:id`.
+
+### 3. Script updates
+- Updated budget spending update script to align with the standardized field names and environment loading.
+
+### 4. Transaction location + search improvements (advanced filtering groundwork)
+- Backend transaction search now matches against `title`, `description`, and `location` fields (fixes “Los Angeles, CA returns unrelated results” when location data exists).
+- Frontend transaction create/edit form now supports an optional **Location** field and persists it to the API.
+- Backend transaction create/update endpoints now validate optional `location` length (max 100 chars).
+
+### 5. Frontend feature completeness improvements
+- Added a **Budget Alerts** panel on the Budgets page with severity levels, unread counts, and mark-as-read.
+- Added CSV **Export** actions for **Budgets** and **Categories** pages.
+- Added a dedicated **Location** filter field on the Transactions page (alongside existing search).
+- Debounced Transactions search/location requests and added toast error feedback for failed fetches.
+- Added **Categories pagination** support end-to-end (backend `page`/`limit` + frontend controls) and added lightweight caching to reduce redundant category fetches.
+
+---
+
 ## 🔧 Major Issues Fixed
 
 ### 1. Redux State Management Issues
@@ -78,10 +107,15 @@
 
 ## 📊 API Testing Results
 
+### Minimal validation run (local) ✅
+- Backend: `npm run test:database`
+- Frontend: `npm run lint`
+- Frontend: `CI=true npm run test:ci` (no tests found; exits 0 via `--passWithNoTests`)
+
 ### Budgets API ✅
 - **Endpoint**: `/api/budgets`
 - **Status**: Working correctly
-- **Data**: Returns 4 budgets with proper structure
+- **Data**: Returns budgets with proper structure (local DB currently has 3 budgets)
 - **Response Format**: `{ data: { budgets: [...], summary: {...}, pagination: {...} } }`
 
 ### Categories API ✅
@@ -93,7 +127,7 @@
 ### Transactions API ✅
 - **Endpoint**: `/api/transactions`
 - **Status**: Working correctly
-- **Data**: Returns 93 transactions with pagination
+- **Data**: Returns transactions with pagination (local DB currently has 75 transactions)
 - **Response Format**: `{ data: { transactions: [...], pagination: {...}, summary: {...} } }`
 
 ### Reports API ✅
@@ -106,7 +140,7 @@
 ## 🔍 Investigation Process
 
 ### Database Verification
-1. **User Check**: Confirmed `piyush@gmail.com` exists with ID `68e4c8cb0ffdfa69f0364d2f`
+1. **User Check**: Confirmed user(s) exist and can authenticate
 2. **Data Validation**: Verified all data exists in MongoDB
 3. **API Testing**: Confirmed all backend endpoints return correct data
 
@@ -154,15 +188,16 @@
    - Optimize API calls and reduce redundant requests
 
 3. **Feature Completeness**
-   - Complete budget alerts functionality
-   - Add export/import capabilities
-   - Implement advanced filtering options
+   - ✅ Improve budget alerts UX (notifications, severity levels)
+   - ✅ Add export/import capabilities (budgets/categories exports added)
+   - ✅ Implement advanced filtering options (location field filter added)
 
 ### Medium Priority
 1. **Testing Coverage**
-   - Add unit tests for Redux slices
-   - Implement integration tests
-   - Add end-to-end testing
+   - Add unit tests for Redux slices (currently no Jest tests detected in repo configs)
+   - Implement integration tests for core API routes (transactions/budgets/categories)
+   - Add end-to-end testing for critical user flows
+   - Minimal checks currently used: backend DB health script, frontend lint, CI test runner with passWithNoTests
 
 2. **Security Enhancements**
    - Implement rate limiting

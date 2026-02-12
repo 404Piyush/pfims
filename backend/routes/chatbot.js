@@ -42,6 +42,46 @@ const fetchWithTimeout = async (url, options, timeoutMs) => {
   }
 };
 
+const extractAssistantMessage = (data) => {
+  return (
+    data?.message?.content ||
+    data?.content ||
+    data?.choices?.[0]?.message?.content ||
+    data?.choices?.[0]?.text ||
+    ''
+  );
+};
+
+const extractFinishReason = (data) => {
+  return (
+    data?.choices?.[0]?.finish_reason ||
+    data?.choices?.[0]?.finishReason ||
+    data?.done_reason ||
+    data?.doneReason ||
+    data?.finish_reason ||
+    data?.finishReason ||
+    ''
+  );
+};
+
+const looksTruncated = (text) => {
+  const t = String(text || '').trim();
+  if (t.length < 200) return false;
+  if (/[.!?]["')\]]?\s*$/.test(t)) return false;
+  if (t.endsWith('```')) return false;
+  if (/Actionable Next Steps\s*:\s*$/i.test(t)) return true;
+  if (/3\)\s*Actionable Next Steps\s*:\s*$/i.test(t)) return true;
+  const actionIdx = t.toLowerCase().lastIndexOf('actionable next steps:');
+  if (actionIdx !== -1) {
+    const after = t.slice(actionIdx + 'actionable next steps:'.length).trim();
+    if (!after) return true;
+  }
+  if (t.endsWith(':')) return true;
+  const lastLine = t.split('\n').slice(-1)[0] || '';
+  if (lastLine.length > 0 && lastLine.length < 20) return true;
+  return true;
+};
+
 // Helper to derive a concise title from the first user message
 const deriveTitle = (text) => {
   if (!text) return 'New Chat';
@@ -71,8 +111,13 @@ router.post(
   [
     body('message')
       .trim()
-      .isLength({ min: 1, max: 4000 })
-      .withMessage('Message must be between 1 and 4000 characters'),
+      .isLength({ min: 1, max: 8000 })
+      .withMessage('Message must be between 1 and 8000 characters'),
+    body('extraContext')
+      .optional({ nullable: true })
+      .isString()
+      .isLength({ max: 60000 })
+      .withMessage('extraContext must be at most 60000 characters'),
     body('history')
       .optional()
       .isArray()
@@ -102,7 +147,7 @@ router.post(
   auth,
   async (req, res) => {
     try {
-      const { message, history = [], includeContext = true, debug = false, lite = false, sessionId: clientSessionId } = req.body;
+      const { message, extraContext = '', history = [], includeContext = true, debug = false, lite = false, sessionId: clientSessionId } = req.body;
       const shouldDebug = debug || DEBUG_LOG;
       const provider = 'atlas';
       const userId = req.user?._id || req.user?.id || 'unknown';
@@ -114,11 +159,10 @@ router.post(
       const atlasBaseModel = process.env.ATLAS_MODEL || 'zai-org/GLM-4.5-Air';
       const model = lite ? (provider === 'atlas' ? atlasBaseModel : liteModel) : (provider === 'atlas' ? atlasBaseModel : baseModel);
 
-      // Timeouts tuned to stay under frontend's 10s axios timeout
-      // Timeouts tuned with frontend's 15s axios timeout
-      const atlasTimeoutMs = Number(process.env.ATLAS_TIMEOUT_MS || 12000);
-      const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS || 9000);
-      const fallbackTimeoutMs = Number(process.env.FALLBACK_TIMEOUT_MS || 8200);
+      // Timeouts tuned with frontend's chatbot request timeout
+      const atlasTimeoutMs = Number(process.env.ATLAS_TIMEOUT_MS || 55000);
+      const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS || 45000);
+      const fallbackTimeoutMs = Number(process.env.FALLBACK_TIMEOUT_MS || 30000);
 
       // Load or create chat session and build history from DB
       let session;
@@ -157,10 +201,13 @@ router.post(
       }
 
       // Compose messages for provider call (append current user message at the end)
+      const combinedUserMessage = extraContext
+        ? `${message}\n\n---\nAdditional data (do not repeat verbatim; use for analysis only):\n${String(extraContext).slice(0, 60000)}`
+        : message;
       const messages = [
         { role: 'system', content: SYSTEM_PROMPT },
         ...filteredHistory,
-        { role: 'user', content: message }
+        { role: 'user', content: combinedUserMessage }
       ];
 
       const options = {
@@ -171,7 +218,7 @@ router.post(
 
       const atlasOptions = {
         temperature: Number(process.env.ATLAS_TEMPERATURE || 0.7),
-        max_tokens: Number(process.env.ATLAS_MAX_TOKENS || (lite ? 2048 : 4096)),
+        max_tokens: Number(process.env.ATLAS_MAX_TOKENS || (lite ? 4096 : 8192)),
         top_p: Number(process.env.ATLAS_TOP_P || 0.9),
         top_k: Number(process.env.ATLAS_TOP_K || 50),
         repetition_penalty: Number(process.env.ATLAS_REPETITION_PENALTY || 1.1)
@@ -350,6 +397,7 @@ router.post(
         await session.save();
       }
 
+      const durationMs = Date.now() - start;
       if (!response.ok) {
         const errText = await response.text();
         const statusCode = response.status;
@@ -439,11 +487,65 @@ router.post(
       }
 
       const data = await response.json();
-      const assistantMessage = data?.message?.content || data?.content || data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || '';
+      const assistantMessage = extractAssistantMessage(data);
+      const finishReason = extractFinishReason(data);
+      const shouldAutoContinue = ['length', 'max_tokens', 'max_tokens_reached'].includes(String(finishReason || '').toLowerCase()) || looksTruncated(assistantMessage);
+
+      let fullAssistantMessage = assistantMessage;
+      if (shouldAutoContinue && assistantMessage) {
+        try {
+          const contMessages = [
+            ...messages,
+            { role: 'assistant', content: assistantMessage },
+            { role: 'user', content: 'Continue exactly where you left off. Do not repeat any previous text.' },
+          ];
+
+          const contResponse =
+            provider === 'atlas'
+              ? await fetchWithTimeout(atlasUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${atlasApiKey}`
+                  },
+                  body: JSON.stringify({
+                    model,
+                    messages: contMessages,
+                    max_tokens: Math.min(2048, atlasOptions.max_tokens),
+                    temperature: atlasOptions.temperature,
+                    top_p: atlasOptions.top_p,
+                    top_k: atlasOptions.top_k,
+                    repetition_penalty: atlasOptions.repetition_penalty,
+                    stream: false,
+                    systemPrompt: ''
+                  })
+                }, atlasTimeoutMs)
+              : await fetchWithTimeout(ollamaUrl, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    model,
+                    messages: contMessages,
+                    stream: false,
+                    options
+                  })
+                }, ollamaTimeoutMs);
+
+          if (contResponse.ok) {
+            const contData = await contResponse.json();
+            const continuation = extractAssistantMessage(contData);
+            if (continuation) {
+              fullAssistantMessage = `${assistantMessage.trim()}\n\n${continuation.trim()}`;
+            }
+          }
+        } catch (e) {
+        }
+      }
 
       // Append assistant reply to session
-      if (assistantMessage && session) {
-        session.messages.push({ role: 'assistant', content: assistantMessage });
+      if (fullAssistantMessage && session) {
+        const contentToStore = fullAssistantMessage.length > 30000 ? fullAssistantMessage.slice(0, 30000) : fullAssistantMessage;
+        session.messages.push({ role: 'assistant', content: contentToStore });
         session.lastActivityAt = new Date();
         await session.save();
       }
@@ -466,7 +568,7 @@ router.post(
       res.json({
         success: true,
         data: {
-          reply: assistantMessage,
+          reply: fullAssistantMessage,
           sessionId: session?._id,
           meta: shouldDebug ? {
             userId,
@@ -483,6 +585,7 @@ router.post(
               prompt_eval_count: data?.prompt_eval_count,
               eval_count: data?.eval_count,
               done_reason: data?.done_reason,
+              finish_reason: finishReason,
               usage: data?.usage
             }
           } : undefined
@@ -505,8 +608,16 @@ router.post(
 // List sessions
 router.get('/sessions', auth, async (req, res) => {
   try {
+    const limitRaw = Number(req.query.limit);
+    const offsetRaw = Number(req.query.offset);
+    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(50, limitRaw)) : 50;
+    const offset = Number.isFinite(offsetRaw) ? Math.max(0, offsetRaw) : 0;
+
+    const total = await ChatSession.countDocuments({ user: req.user.id, archived: false });
     const sessions = await ChatSession.find({ user: req.user.id, archived: false })
       .sort({ lastActivityAt: -1 })
+      .skip(offset)
+      .limit(limit)
       .select('_id title createdAt updatedAt lastActivityAt messages');
     res.json({
       success: true,
@@ -517,7 +628,14 @@ router.get('/sessions', auth, async (req, res) => {
         updatedAt: s.updatedAt,
         lastActivityAt: s.lastActivityAt,
         messageCount: Array.isArray(s.messages) ? s.messages.length : 0
-      }))
+      })),
+      paging: {
+        total,
+        limit,
+        offset,
+        returned: sessions.length,
+        hasMore: offset + sessions.length < total,
+      }
     });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Failed to list sessions' });

@@ -1,11 +1,24 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
 
+const buildCacheKey = (params) => {
+  const entries = Object.entries(params || {}).filter(([, value]) => value !== undefined);
+  entries.sort(([a], [b]) => a.localeCompare(b));
+  return JSON.stringify(entries);
+};
+
+const CACHE_TTL_MS = 30000;
+
 // Async thunks for category operations
 export const fetchCategories = createAsyncThunk(
   'categories/fetchCategories',
-  async (params = {}, { rejectWithValue }) => {
+  async (params = {}, { rejectWithValue, getState }) => {
     try {
+      const cacheKey = buildCacheKey(params);
+      const cached = getState()?.categories?.cache?.[cacheKey];
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        return cached.payload;
+      }
       const response = await api.get('/categories', { params });
       return response.data;
     } catch (error) {
@@ -70,8 +83,11 @@ const initialState = {
     expenseCategories: 0,
     categoryUsage: []
   },
+  pagination: null,
+  summary: null,
   loading: false,
   error: null,
+  cache: {},
   filters: {
     type: '', // 'income' or 'expense'
     search: '',
@@ -111,15 +127,25 @@ const categorySlice = createSlice({
       })
       .addCase(fetchCategories.fulfilled, (state, action) => {
         state.loading = false;
-        // Handle nested API response structure
-        if (action.payload.data && action.payload.data.categories) {
+        const cacheKey = buildCacheKey(action.meta?.arg || {});
+        state.cache[cacheKey] = { payload: action.payload, timestamp: Date.now() };
+
+        if (action.payload?.data?.categories) {
           state.categories = action.payload.data.categories;
-        } else if (action.payload.categories) {
+          state.pagination = action.payload.data.pagination || null;
+          state.summary = action.payload.data.summary || null;
+        } else if (action.payload?.categories) {
           state.categories = action.payload.categories;
+          state.pagination = action.payload.pagination || null;
+          state.summary = action.payload.summary || null;
         } else if (Array.isArray(action.payload)) {
           state.categories = action.payload;
+          state.pagination = null;
+          state.summary = null;
         } else {
           state.categories = [];
+          state.pagination = null;
+          state.summary = null;
         }
       })
       .addCase(fetchCategories.rejected, (state, action) => {
@@ -134,7 +160,11 @@ const categorySlice = createSlice({
       })
       .addCase(createCategory.fulfilled, (state, action) => {
         state.loading = false;
-        state.categories.push(action.payload);
+        state.cache = {};
+        const createdCategory = action.payload?.category || action.payload;
+        if (createdCategory) {
+          state.categories.push(createdCategory);
+        }
       })
       .addCase(createCategory.rejected, (state, action) => {
         state.loading = false;
@@ -148,9 +178,11 @@ const categorySlice = createSlice({
       })
       .addCase(updateCategory.fulfilled, (state, action) => {
         state.loading = false;
-        const index = state.categories.findIndex(c => c._id === action.payload._id);
+        state.cache = {};
+        const updatedCategory = action.payload?.category || action.payload;
+        const index = state.categories.findIndex(c => c._id === updatedCategory?._id);
         if (index !== -1) {
-          state.categories[index] = action.payload;
+          state.categories[index] = updatedCategory;
         }
       })
       .addCase(updateCategory.rejected, (state, action) => {
@@ -165,6 +197,7 @@ const categorySlice = createSlice({
       })
       .addCase(deleteCategory.fulfilled, (state, action) => {
         state.loading = false;
+        state.cache = {};
         state.categories = state.categories.filter(c => c._id !== action.payload);
       })
       .addCase(deleteCategory.rejected, (state, action) => {

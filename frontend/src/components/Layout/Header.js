@@ -1,11 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
   Bars3Icon,
   BellIcon,
-  MagnifyingGlassIcon,
   UserIcon,
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
@@ -13,20 +12,26 @@ import {
 } from '@heroicons/react/24/outline';
 import { toggleSidebar } from '../../store/slices/uiSlice';
 import { logout } from '../../store/slices/authSlice';
+import { getBudgetAlerts, markAlertAsRead, clearAlerts } from '../../store/slices/budgetSlice';
 
 const Header = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user } = useSelector((state) => state.auth);
+  const { alerts, alertsLoading } = useSelector((state) => state.budgets);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const userMenuRef = useRef(null);
+  const notificationsRef = useRef(null);
 
   // Close user menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
         setUserMenuOpen(false);
+      }
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setNotificationsOpen(false);
       }
     };
 
@@ -39,13 +44,39 @@ const Header = () => {
     setUserMenuOpen(false);
   };
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      // Navigate to transactions with search query
-      navigate(`/transactions?search=${encodeURIComponent(searchQuery.trim())}`);
-      setSearchQuery('');
-    }
+  const alertKey = (a) => String(a?.id || a?._id || '');
+  const unreadCount = Array.isArray(alerts) ? alerts.filter((a) => !a?.isRead && alertKey(a)).length : 0;
+
+  const formatAlertLine = (a) => {
+    const utilization = typeof a?.utilizationPercentage === 'number' ? `${a.utilizationPercentage.toFixed(1)}%` : '';
+    const category = a?.categoryName ? ` • ${a.categoryName}` : '';
+    const kind = a?.type === 'over_budget' ? 'Over budget' : 'Budget alert';
+    const suffix = utilization ? ` • ${utilization}` : '';
+    return `${kind}${category}${suffix}`.trim();
+  };
+
+  const formatAlertTime = (a) => {
+    const d = a?.createdAt ? new Date(a.createdAt) : null;
+    if (!d || Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString();
+  };
+
+  const toggleNotifications = () => {
+    setNotificationsOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        dispatch(getBudgetAlerts());
+      }
+      return next;
+    });
+  };
+
+  const handleMarkAllRead = () => {
+    if (!Array.isArray(alerts)) return;
+    alerts.forEach((a) => {
+      const key = alertKey(a);
+      if (key && !a?.isRead) dispatch(markAlertAsRead(key));
+    });
   };
 
   const userMenuItems = [
@@ -86,37 +117,119 @@ const Header = () => {
             >
               <Bars3Icon className="h-6 w-6" />
             </button>
-
-            {/* Search */}
-            <form onSubmit={handleSearch} className="hidden sm:block">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <MagnifyingGlassIcon className="h-5 w-5 text-secondary-400" />
-                </div>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search transactions..."
-                  className="block w-full pl-10 pr-3 py-2 border border-secondary-300 rounded-lg text-sm placeholder-secondary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-            </form>
           </div>
 
           {/* Right side */}
           <div className="flex items-center space-x-4">
-            {/* Search button for mobile */}
-            <button className="p-2 rounded-lg text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 transition-colors sm:hidden">
-              <MagnifyingGlassIcon className="h-6 w-6" />
-            </button>
-
             {/* Notifications */}
-            <button className="relative p-2 rounded-lg text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 transition-colors">
-              <BellIcon className="h-6 w-6" />
-              {/* Notification badge */}
-              <span className="absolute top-1 right-1 h-2 w-2 bg-danger-500 rounded-full"></span>
-            </button>
+            <div className="relative" ref={notificationsRef}>
+              <button
+                type="button"
+                onClick={toggleNotifications}
+                className="relative p-2 rounded-lg text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 transition-colors"
+              >
+                <BellIcon className="h-6 w-6" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 h-2 w-2 bg-danger-500 rounded-full"></span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-secondary-200 z-50 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-secondary-200 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-secondary-900">Alerts</div>
+                      <div className="text-xs text-secondary-600">
+                        {unreadCount > 0 ? `${unreadCount} unread` : 'No unread alerts'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => dispatch(getBudgetAlerts())}
+                        className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                        disabled={alertsLoading}
+                      >
+                        Refresh
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleMarkAllRead}
+                        className="text-xs text-secondary-700 hover:text-secondary-900 font-medium"
+                        disabled={unreadCount === 0}
+                      >
+                        Mark all read
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto">
+                    {alertsLoading && (!Array.isArray(alerts) || alerts.length === 0) ? (
+                      <div className="px-4 py-4 text-sm text-secondary-600">Loading alerts…</div>
+                    ) : (!Array.isArray(alerts) || alerts.length === 0) ? (
+                      <div className="px-4 py-4 text-sm text-secondary-600">No budget alerts right now.</div>
+                    ) : (
+                      <div className="divide-y divide-secondary-100">
+                        {alerts.slice(0, 8).map((a) => {
+                          const key = alertKey(a);
+                          const isUnread = !a?.isRead;
+                          return (
+                            <div key={key || `${a?.budgetId}-${a?.categoryId}`} className="px-4 py-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className={clsx('text-sm font-medium truncate', isUnread ? 'text-secondary-900' : 'text-secondary-700')}>
+                                    {a?.budgetName || 'Budget'}
+                                  </div>
+                                  <div className="text-xs text-secondary-600">
+                                    {formatAlertLine(a)}
+                                  </div>
+                                  {a?.createdAt && (
+                                    <div className="text-xs text-secondary-500 mt-1">{formatAlertTime(a)}</div>
+                                  )}
+                                </div>
+                                {isUnread && key && (
+                                  <button
+                                    type="button"
+                                    onClick={() => dispatch(markAlertAsRead(key))}
+                                    className="text-xs text-primary-600 hover:text-primary-700 font-medium whitespace-nowrap"
+                                  >
+                                    Mark read
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="px-4 py-3 border-t border-secondary-200 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        dispatch(clearAlerts());
+                        setNotificationsOpen(false);
+                      }}
+                      className="text-xs text-secondary-700 hover:text-secondary-900 font-medium"
+                      disabled={!Array.isArray(alerts) || alerts.length === 0}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigate('/budgets');
+                        setNotificationsOpen(false);
+                      }}
+                      className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                    >
+                      View all
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* User menu */}
             <div className="relative" ref={userMenuRef}>

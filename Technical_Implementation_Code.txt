@@ -1,0 +1,842 @@
+================================================================================
+PERSONAL FINANCE & INVESTMENT MANAGEMENT SYSTEM
+TECHNICAL IMPLEMENTATION CODE
+================================================================================
+
+================================================================================
+PART 1: PORTFOLIO TRACKING & ALERTS
+================================================================================
+
+------------------------------------------------------------------------
+PortfolioTracker Class - Main Portfolio Management
+------------------------------------------------------------------------
+
+class PortfolioTracker {
+  constructor() {
+    this.portfolio = [];
+    this.alerts = [];
+  }
+
+  // Add stock to portfolio
+  addStock(stock) {
+    this.portfolio.push({
+      id: Date.now(),
+      symbol: stock.symbol,        // e.g., "RELIANCE.NS"
+      name: stock.name,             // e.g., "Reliance Industries"
+      quantity: stock.quantity,
+      buyPrice: stock.buyPrice,
+      currentPrice: null,
+      lastUpdated: null,
+      alertThreshold: stock.alertThreshold || 5  // Alert if drops 5%
+    });
+  }
+
+  // Fetch live prices using Yahoo Finance
+  async updatePrices() {
+    const yf = require('yfinance2');
+    
+    for (let stock of this.portfolio) {
+      try {
+        const data = await yf.quote(stock.symbol);
+        const currentPrice = data.regularMarketPrice;
+        
+        stock.currentPrice = currentPrice;
+        stock.lastUpdated = new Date();
+        
+        // Calculate profit/loss
+        stock.profitLoss = ((currentPrice - stock.buyPrice) / stock.buyPrice) * 100;
+        
+        // Check if alert should trigger
+        this.checkAlert(stock);
+        
+      } catch (error) {
+        console.error(`Error fetching ${stock.symbol}:`, error);
+      }
+    }
+  }
+
+  // Check if price alert should trigger
+  checkAlert(stock) {
+    const changePercent = ((stock.currentPrice - stock.buyPrice) / stock.buyPrice) * 100;
+    
+    // Alert if drops below threshold
+    if (changePercent < -stock.alertThreshold) {
+      this.triggerAlert({
+        type: 'PRICE_DROP',
+        stock: stock.name,
+        symbol: stock.symbol,
+        currentPrice: stock.currentPrice,
+        buyPrice: stock.buyPrice,
+        dropPercent: Math.abs(changePercent).toFixed(2),
+        message: `${stock.name} dropped ${Math.abs(changePercent).toFixed(2)}% from your buy price!`
+      });
+    }
+    
+    // Alert if crosses custom threshold
+    if (stock.customAlertPrice && stock.currentPrice <= stock.customAlertPrice) {
+      this.triggerAlert({
+        type: 'CUSTOM_ALERT',
+        stock: stock.name,
+        symbol: stock.symbol,
+        currentPrice: stock.currentPrice,
+        targetPrice: stock.customAlertPrice,
+        message: `${stock.name} reached your alert price of ₹${stock.customAlertPrice}`
+      });
+    }
+  }
+
+  // Trigger alert (email, SMS, push notification)
+  triggerAlert(alert) {
+    console.log('🚨 ALERT:', alert.message);
+    
+    this.alerts.push({
+      ...alert,
+      timestamp: new Date()
+    });
+    
+    // Send notification
+    this.sendNotification(alert);
+  }
+
+  // Send notification to user
+  async sendNotification(alert) {
+    // Option 1: Email (using NodeMailer)
+    // Option 2: SMS (using Twilio)
+    // Option 3: Push Notification (using Firebase)
+    // Option 4: WhatsApp (using Twilio WhatsApp API)
+    
+    // Example: Browser notification
+    if ('Notification' in window) {
+      new Notification('Stock Alert', {
+        body: alert.message,
+        icon: '/alert-icon.png'
+      });
+    }
+  }
+
+  // Set custom alert for a stock
+  setCustomAlert(stockId, alertPrice) {
+    const stock = this.portfolio.find(s => s.id === stockId);
+    if (stock) {
+      stock.customAlertPrice = alertPrice;
+    }
+  }
+
+  // Get portfolio summary
+  getPortfolioSummary() {
+    let totalInvested = 0;
+    let currentValue = 0;
+    
+    this.portfolio.forEach(stock => {
+      totalInvested += stock.buyPrice * stock.quantity;
+      currentValue += (stock.currentPrice || stock.buyPrice) * stock.quantity;
+    });
+    
+    return {
+      totalInvested: totalInvested.toFixed(2),
+      currentValue: currentValue.toFixed(2),
+      profitLoss: (currentValue - totalInvested).toFixed(2),
+      profitLossPercent: (((currentValue - totalInvested) / totalInvested) * 100).toFixed(2)
+    };
+  }
+}
+
+
+================================================================================
+PART 2: STOCK ANALYSIS & RECOMMENDATIONS
+================================================================================
+
+------------------------------------------------------------------------
+StockAnalyzer Class - Technical Analysis Engine
+------------------------------------------------------------------------
+
+class StockAnalyzer {
+  
+  // Fetch historical data for technical analysis
+  async fetchHistoricalData(symbol, period = '1y') {
+    const yf = require('yfinance2');
+    const data = await yf.historical(symbol, {
+      period: period,
+      interval: '1d'
+    });
+    return data;
+  }
+
+  // Calculate technical indicators
+  async calculateIndicators(symbol) {
+    const history = await this.fetchHistoricalData(symbol, '6mo');
+    
+    // Simple Moving Averages
+    const sma20 = this.calculateSMA(history, 20);
+    const sma50 = this.calculateSMA(history, 50);
+    const sma200 = this.calculateSMA(history, 200);
+    
+    // Relative Strength Index (RSI)
+    const rsi = this.calculateRSI(history, 14);
+    
+    // Moving Average Convergence Divergence (MACD)
+    const macd = this.calculateMACD(history);
+    
+    // Current price
+    const currentPrice = history[history.length - 1].close;
+    
+    return {
+      currentPrice,
+      sma20,
+      sma50,
+      sma200,
+      rsi,
+      macd,
+      volume: history[history.length - 1].volume
+    };
+  }
+
+  // Calculate Simple Moving Average
+  calculateSMA(data, period) {
+    const prices = data.slice(-period).map(d => d.close);
+    const sum = prices.reduce((a, b) => a + b, 0);
+    return sum / period;
+  }
+
+  // Calculate RSI (Relative Strength Index)
+  calculateRSI(data, period = 14) {
+    let gains = 0;
+    let losses = 0;
+    
+    const recentData = data.slice(-period - 1);
+    
+    for (let i = 1; i < recentData.length; i++) {
+      const change = recentData[i].close - recentData[i - 1].close;
+      if (change > 0) {
+        gains += change;
+      } else {
+        losses += Math.abs(change);
+      }
+    }
+    
+    const avgGain = gains / period;
+    const avgLoss = losses / period;
+    const rs = avgGain / avgLoss;
+    const rsi = 100 - (100 / (1 + rs));
+    
+    return rsi;
+  }
+
+  // Calculate MACD
+  calculateMACD(data) {
+    const ema12 = this.calculateEMA(data, 12);
+    const ema26 = this.calculateEMA(data, 26);
+    const macdLine = ema12 - ema26;
+    
+    return {
+      macd: macdLine,
+      signal: ema12,
+      histogram: macdLine - ema26
+    };
+  }
+
+  // Calculate Exponential Moving Average
+  calculateEMA(data, period) {
+    const prices = data.map(d => d.close);
+    const k = 2 / (period + 1);
+    let ema = prices[0];
+    
+    for (let i = 1; i < prices.length; i++) {
+      ema = (prices[i] * k) + (ema * (1 - k));
+    }
+    
+    return ema;
+  }
+
+  // Generate Buy/Sell/Hold recommendation
+  async getRecommendation(symbol) {
+    const indicators = await this.calculateIndicators(symbol);
+    
+    let signals = {
+      buy: 0,
+      sell: 0,
+      hold: 0
+    };
+    
+    // Signal 1: Moving Average Crossover (35% weight = 3.5 points)
+    if (indicators.sma20 > indicators.sma50 && indicators.currentPrice > indicators.sma20) {
+      signals.buy += 3.5;  // Strong buy signal
+    } else if (indicators.sma20 < indicators.sma50 && indicators.currentPrice < indicators.sma20) {
+      signals.sell += 3.5;  // Strong sell signal
+    } else {
+      signals.hold += 1;
+    }
+    
+    // Signal 2: RSI (25% weight = 2.5 points)
+    if (indicators.rsi < 30) {
+      signals.buy += 2.5;  // Oversold - buy signal
+    } else if (indicators.rsi > 70) {
+      signals.sell += 2.5;  // Overbought - sell signal
+    } else if (indicators.rsi >= 40 && indicators.rsi <= 60) {
+      signals.hold += 1;  // Neutral
+    }
+    
+    // Signal 3: MACD (25% weight = 2.5 points)
+    if (indicators.macd.macd > indicators.macd.signal) {
+      signals.buy += 2.5;
+    } else {
+      signals.sell += 2.5;
+    }
+    
+    // Signal 4: Volume (15% weight = 1.5 points)
+    // Placeholder - would need average volume calculation
+    // For now, assume neutral
+    signals.hold += 0.5;
+    
+    // Determine final recommendation
+    const maxSignal = Math.max(signals.buy, signals.sell, signals.hold);
+    let recommendation;
+    let confidence;
+    
+    if (signals.buy === maxSignal) {
+      recommendation = 'BUY';
+      confidence = (signals.buy / 10) * 100;  // Out of 10 possible points
+    } else if (signals.sell === maxSignal) {
+      recommendation = 'SELL';
+      confidence = (signals.sell / 10) * 100;
+    } else {
+      recommendation = 'HOLD';
+      confidence = (signals.hold / 10) * 100;
+    }
+    
+    return {
+      symbol,
+      recommendation,
+      confidence: confidence.toFixed(0) + '%',
+      indicators: {
+        currentPrice: indicators.currentPrice.toFixed(2),
+        rsi: indicators.rsi.toFixed(2),
+        sma20: indicators.sma20.toFixed(2),
+        sma50: indicators.sma50.toFixed(2),
+        sma200: indicators.sma200.toFixed(2)
+      },
+      signals: signals,
+      reasoning: this.generateReasoning(indicators, signals)
+    };
+  }
+
+  // Generate human-readable reasoning
+  generateReasoning(indicators, signals) {
+    const reasons = [];
+    
+    if (indicators.rsi < 30) {
+      reasons.push(`RSI (${indicators.rsi.toFixed(2)}) indicates oversold conditions`);
+    } else if (indicators.rsi > 70) {
+      reasons.push(`RSI (${indicators.rsi.toFixed(2)}) indicates overbought conditions`);
+    }
+    
+    if (indicators.currentPrice > indicators.sma20) {
+      reasons.push(`Price above 20-day SMA (₹${indicators.sma20.toFixed(2)})`);
+    } else {
+      reasons.push(`Price below 20-day SMA (₹${indicators.sma20.toFixed(2)})`);
+    }
+    
+    if (indicators.sma20 > indicators.sma50) {
+      reasons.push('Short-term trend is bullish');
+    } else {
+      reasons.push('Short-term trend is bearish');
+    }
+    
+    return reasons;
+  }
+}
+
+
+================================================================================
+PART 3: INTEGRATED PORTFOLIO APPLICATION
+================================================================================
+
+------------------------------------------------------------------------
+SmartPortfolioApp Class - Main Application
+------------------------------------------------------------------------
+
+class SmartPortfolioApp {
+  constructor() {
+    this.tracker = new PortfolioTracker();
+    this.analyzer = new StockAnalyzer();
+    this.monitoringInterval = null;
+  }
+
+  // Add stock with monitoring
+  async addStock(stockData) {
+    // Add to portfolio
+    this.tracker.addStock(stockData);
+    
+    // Get initial recommendation
+    const recommendation = await this.analyzer.getRecommendation(stockData.symbol);
+    
+    console.log(`Added ${stockData.name} to portfolio`);
+    console.log(`Initial Recommendation: ${recommendation.recommendation} (${recommendation.confidence})`);
+    
+    return recommendation;
+  }
+
+  // Start monitoring (runs every 5 minutes)
+  startMonitoring() {
+    console.log('📊 Starting portfolio monitoring...');
+    
+    // Update immediately
+    this.updatePortfolio();
+    
+    // Then update every 5 minutes
+    this.monitoringInterval = setInterval(() => {
+      this.updatePortfolio();
+    }, 5 * 60 * 1000);  // 5 minutes
+  }
+
+  // Stop monitoring
+  stopMonitoring() {
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+      console.log('Monitoring stopped');
+    }
+  }
+
+  // Update portfolio and check for alerts
+  async updatePortfolio() {
+    console.log('🔄 Updating portfolio...');
+    
+    // Update all prices
+    await this.tracker.updatePrices();
+    
+    // Get summary
+    const summary = this.tracker.getPortfolioSummary();
+    console.log('Portfolio Summary:', summary);
+    
+    // Check each stock for recommendations
+    for (let stock of this.tracker.portfolio) {
+      if (stock.profitLoss < -5) {  // If stock is down more than 5%
+        const recommendation = await this.analyzer.getRecommendation(stock.symbol);
+        
+        if (recommendation.recommendation === 'SELL') {
+          this.tracker.triggerAlert({
+            type: 'RECOMMENDATION',
+            stock: stock.name,
+            symbol: stock.symbol,
+            recommendation: 'SELL',
+            confidence: recommendation.confidence,
+            message: `Consider selling ${stock.name}. Current signals suggest selling.`,
+            reasoning: recommendation.reasoning
+          });
+        }
+      }
+    }
+  }
+
+  // Get detailed analysis for a specific stock
+  async analyzeStock(symbol) {
+    const recommendation = await this.analyzer.getRecommendation(symbol);
+    return recommendation;
+  }
+}
+
+
+================================================================================
+PART 4: USAGE EXAMPLE
+================================================================================
+
+------------------------------------------------------------------------
+Main Function - How to Use the System
+------------------------------------------------------------------------
+
+async function main() {
+  const app = new SmartPortfolioApp();
+  
+  // User adds stocks to monitor
+  await app.addStock({
+    symbol: 'RELIANCE.NS',
+    name: 'Reliance Industries',
+    quantity: 10,
+    buyPrice: 2500,
+    alertThreshold: 5  // Alert if drops 5%
+  });
+  
+  await app.addStock({
+    symbol: 'TCS.NS',
+    name: 'TCS',
+    quantity: 5,
+    buyPrice: 3200,
+    alertThreshold: 3
+  });
+  
+  await app.addStock({
+    symbol: 'INFY.NS',
+    name: 'Infosys',
+    quantity: 15,
+    buyPrice: 1450,
+    alertThreshold: 4
+  });
+  
+  // Start monitoring
+  app.startMonitoring();
+  
+  // Get detailed analysis for a specific stock
+  const analysis = await app.analyzeStock('RELIANCE.NS');
+  console.log('Detailed Analysis:', analysis);
+}
+
+// Run the application
+main();
+
+
+================================================================================
+PART 5: MUTUAL FUND RECOMMENDATION SYSTEM
+================================================================================
+
+------------------------------------------------------------------------
+Risk Profiling Algorithm
+------------------------------------------------------------------------
+
+function calculateRiskProfile(answers) {
+  // Weighted scoring
+  const score = (
+    answers.riskTolerance * 0.35 +
+    answers.duration * 0.30 +
+    answers.savingsCapacity * 0.20 +
+    answers.financialGoal * 0.15
+  );
+  
+  // Determine profile
+  let profile;
+  let allocation;
+  
+  if (score <= 2.0) {
+    profile = "Conservative";
+    allocation = {
+      largeCap: 40,
+      midCap: 10,
+      smallCap: 0,
+      bonds: 50
+    };
+  } else if (score <= 3.0) {
+    profile = "Moderate";
+    allocation = {
+      largeCap: 40,
+      midCap: 25,
+      smallCap: 10,
+      bonds: 25
+    };
+  } else {
+    profile = "Aggressive";
+    allocation = {
+      largeCap: 35,
+      midCap: 30,
+      smallCap: 25,
+      bonds: 10
+    };
+  }
+  
+  // Apply age adjustments
+  if (answers.age > 50) {
+    allocation.smallCap = Math.min(allocation.smallCap, 15);
+    allocation.bonds = Math.max(allocation.bonds, 30);
+  }
+  
+  if (answers.age < 25) {
+    const totalEquity = allocation.largeCap + allocation.midCap + allocation.smallCap;
+    if (totalEquity < 70) {
+      const increase = 70 - totalEquity;
+      allocation.bonds -= increase;
+      allocation.largeCap += increase;
+    }
+  }
+  
+  // Emergency fund override
+  if (!answers.hasEmergencyFund) {
+    allocation.liquidFund = 20;
+    // Reduce others proportionally
+    for (let key in allocation) {
+      if (key !== 'liquidFund') {
+        allocation[key] = Math.round(allocation[key] * 0.8);
+      }
+    }
+  }
+  
+  return {
+    profile,
+    score: score.toFixed(2),
+    allocation
+  };
+}
+
+
+------------------------------------------------------------------------
+Fund Selection from MFApi
+------------------------------------------------------------------------
+
+async function selectTopFunds(category, count = 3) {
+  // Fetch fund data from MFApi
+  const response = await fetch('https://api.mfapi.in/mf');
+  const allFunds = await response.json();
+  
+  // Filter by category
+  const categoryFunds = allFunds.filter(fund => 
+    fund.schemeName.toLowerCase().includes(category.toLowerCase())
+  );
+  
+  // Fetch detailed data and calculate returns
+  const fundsWithReturns = [];
+  
+  for (let fund of categoryFunds.slice(0, 20)) { // Limit to 20 for performance
+    try {
+      const detailResponse = await fetch(`https://api.mfapi.in/mf/${fund.schemeCode}`);
+      const details = await detailResponse.json();
+      
+      if (details.data && details.data.length > 252) {
+        const currentNAV = parseFloat(details.data[0].nav);
+        const oneYearAgoNAV = parseFloat(details.data[252].nav);
+        const returns = ((currentNAV - oneYearAgoNAV) / oneYearAgoNAV) * 100;
+        
+        fundsWithReturns.push({
+          name: details.meta.scheme_name,
+          returns: returns,
+          nav: currentNAV
+        });
+      }
+    } catch (error) {
+      console.error(`Error fetching ${fund.schemeCode}`);
+    }
+  }
+  
+  // Sort by returns and get top N
+  fundsWithReturns.sort((a, b) => b.returns - a.returns);
+  return fundsWithReturns.slice(0, count);
+}
+
+
+================================================================================
+PART 6: FRONTEND COMPONENT (React)
+================================================================================
+
+------------------------------------------------------------------------
+Portfolio Dashboard Component
+------------------------------------------------------------------------
+
+import React, { useState, useEffect } from 'react';
+
+function PortfolioDashboard() {
+  const [portfolio, setPortfolio] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [summary, setSummary] = useState({
+    totalInvested: 0,
+    currentValue: 0,
+    profitLoss: 0,
+    profitLossPercent: 0
+  });
+
+  useEffect(() => {
+    // Fetch portfolio data
+    fetchPortfolio();
+    
+    // Set up polling every 5 minutes
+    const interval = setInterval(fetchPortfolio, 5 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchPortfolio = async () => {
+    // API call to backend
+    const response = await fetch('/api/portfolio');
+    const data = await response.json();
+    
+    setPortfolio(data.stocks);
+    setSummary(data.summary);
+    setAlerts(data.alerts);
+  };
+
+  const analyzeStock = async (symbol) => {
+    const response = await fetch(`/api/analyze/${symbol}`);
+    const analysis = await response.json();
+    
+    // Show modal or detailed view
+    console.log(analysis);
+  };
+
+  return (
+    <div className="dashboard">
+      <h1>My Portfolio</h1>
+      
+      {/* Portfolio Summary */}
+      <div className="summary-card">
+        <h2>Total Value: ₹{summary.currentValue}</h2>
+        <p className={summary.profitLoss > 0 ? 'profit' : 'loss'}>
+          {summary.profitLoss > 0 ? '+' : ''}₹{summary.profitLoss} 
+          ({summary.profitLossPercent}%)
+        </p>
+      </div>
+
+      {/* Stock List */}
+      <div className="stocks-list">
+        {portfolio.map(stock => (
+          <div key={stock.id} className="stock-card">
+            <h3>{stock.name}</h3>
+            <div className="stock-details">
+              <p>Buy Price: ₹{stock.buyPrice}</p>
+              <p>Current: ₹{stock.currentPrice}</p>
+              <p className={stock.profitLoss > 0 ? 'profit' : 'loss'}>
+                {stock.profitLoss > 0 ? '+' : ''}{stock.profitLoss}%
+              </p>
+            </div>
+            
+            {/* Recommendation Badge */}
+            <div className={`recommendation ${stock.recommendation}`}>
+              {stock.recommendation} ({stock.confidence})
+            </div>
+            
+            <button onClick={() => analyzeStock(stock.symbol)}>
+              View Analysis
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Alerts */}
+      <div className="alerts-section">
+        <h2>Recent Alerts</h2>
+        {alerts.map(alert => (
+          <div key={alert.id} className="alert-card">
+            <span className="alert-icon">🚨</span>
+            <p>{alert.message}</p>
+            <span className="alert-time">
+              {new Date(alert.timestamp).toLocaleString()}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default PortfolioDashboard;
+
+
+================================================================================
+PART 7: NOTIFICATION SYSTEM
+================================================================================
+
+------------------------------------------------------------------------
+Email Notification (NodeMailer)
+------------------------------------------------------------------------
+
+const nodemailer = require('nodemailer');
+
+async function sendEmailAlert(alert, userEmail) {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD
+    }
+  });
+
+  const mailOptions = {
+    from: '"Portfolio Tracker" <alerts@portfoliotracker.com>',
+    to: userEmail,
+    subject: `🚨 Stock Alert: ${alert.stock}`,
+    html: `
+      <h2>Stock Alert</h2>
+      <p><strong>${alert.stock}</strong></p>
+      <p>Current Price: ₹${alert.currentPrice}</p>
+      <p>Change: ${alert.dropPercent}%</p>
+      <p>${alert.message}</p>
+      <hr>
+      <p>Recommendation: ${alert.recommendation} (${alert.confidence})</p>
+      <ul>
+        ${alert.reasoning.map(reason => `<li>${reason}</li>`).join('')}
+      </ul>
+    `
+  };
+
+  await transporter.sendMail(mailOptions);
+}
+
+
+------------------------------------------------------------------------
+SMS Notification (Twilio)
+------------------------------------------------------------------------
+
+const twilio = require('twilio');
+
+async function sendSMSAlert(alert, phoneNumber) {
+  const client = twilio(
+    process.env.TWILIO_ACCOUNT_SID,
+    process.env.TWILIO_AUTH_TOKEN
+  );
+
+  await client.messages.create({
+    body: `🚨 ${alert.stock} Alert: ${alert.message} - ${alert.recommendation} (${alert.confidence})`,
+    from: process.env.TWILIO_PHONE_NUMBER,
+    to: phoneNumber
+  });
+}
+
+
+================================================================================
+PART 8: SAMPLE OUTPUT
+================================================================================
+
+------------------------------------------------------------------------
+Console Output Example
+------------------------------------------------------------------------
+
+📊 Starting portfolio monitoring...
+
+Added Reliance Industries to portfolio
+Initial Recommendation: HOLD (65%)
+
+Added TCS to portfolio
+Initial Recommendation: BUY (72%)
+
+Added Infosys to portfolio
+Initial Recommendation: SELL (68%)
+
+🔄 Updating portfolio...
+
+Portfolio Summary: {
+  totalInvested: '75250.00',
+  currentValue: '78450.00',
+  profitLoss: '3200.00',
+  profitLossPercent: '4.25'
+}
+
+🚨 ALERT: Reliance Industries dropped 6.5% from your buy price!
+
+🚨 RECOMMENDATION ALERT: Consider selling Infosys
+   Confidence: 70%
+   Reasons:
+   - RSI (72.15) indicates overbought conditions
+   - Price below 20-day SMA (₹1,425.00)
+   - Short-term trend is bearish
+
+Detailed Analysis: {
+  symbol: 'RELIANCE.NS',
+  recommendation: 'BUY',
+  confidence: '75%',
+  indicators: {
+    currentPrice: '2337.50',
+    rsi: '28.45',
+    sma20: '2485.50',
+    sma50: '2580.00',
+    sma200: '2500.00'
+  },
+  signals: {
+    buy: 8.5,
+    sell: 1.5,
+    hold: 0
+  },
+  reasoning: [
+    'RSI (28.45) indicates oversold conditions',
+    'Price below 20-day SMA (₹2485.50)',
+    'Short-term trend is bearish'
+  ]
+}
+
+
+================================================================================
+END OF TECHNICAL IMPLEMENTATION
+================================================================================

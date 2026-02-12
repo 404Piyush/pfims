@@ -14,6 +14,15 @@ const authAPI = {
     return api.post('/auth/logout');
   },
 
+  // OTP
+  sendOtp: ({ email, purpose, password }) => {
+    return api.post('/auth/otp/send', { email, purpose, password });
+  },
+
+  verifyOtp: ({ email, purpose, code }) => {
+    return api.post('/auth/otp/verify', { email, purpose, code });
+  },
+
   // Password management
   forgotPassword: (email) => {
     return api.post('/auth/forgot-password', { email });
@@ -43,6 +52,10 @@ const authAPI = {
 
   updateProfile: (profileData) => {
     return api.put('/users/profile', profileData);
+  },
+
+  saveInvestmentProfile: (payload) => {
+    return api.put('/users/investment-profile', payload);
   },
 
   changeEmail: (emailData) => {
