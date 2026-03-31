@@ -10,6 +10,7 @@ import {
   DocumentChartBarIcon,
   BriefcaseIcon,
   BanknotesIcon,
+  PresentationChartLineIcon,
   UserIcon,
   Cog6ToothIcon,
   ChevronLeftIcon,
@@ -24,6 +25,7 @@ import {
   DocumentChartBarIcon as DocumentChartBarIconSolid,
   BriefcaseIcon as BriefcaseIconSolid,
   BanknotesIcon as BanknotesIconSolid,
+  PresentationChartLineIcon as PresentationChartLineIconSolid,
   UserIcon as UserIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
@@ -66,6 +68,12 @@ const navigation = [
     href: '/portfolio',
     icon: BriefcaseIcon,
     iconSolid: BriefcaseIconSolid,
+  },
+  {
+    name: 'Stock Analysis',
+    href: '/stocks/analyse',
+    icon: PresentationChartLineIcon,
+    iconSolid: PresentationChartLineIconSolid,
   },
   {
     name: 'Mutual Funds',

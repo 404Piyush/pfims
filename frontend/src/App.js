@@ -29,6 +29,7 @@ import Settings from './pages/Settings/Settings';
 import Assistant from './pages/Assistant/Assistant';
 import Portfolio from './pages/Portfolio/Portfolio';
 import InvestmentProfileOnboarding from './pages/Onboarding/InvestmentProfileOnboarding';
+import StockAnalysis from './pages/Stocks/StockAnalysis';
 
 // Error pages
 import NotFound from './pages/Error/NotFound';
@@ -120,6 +121,7 @@ function App() {
               <Route path="budgets" element={<Budgets />} />
               <Route path="reports" element={<Reports />} />
               <Route path="portfolio" element={<Portfolio />} />
+              <Route path="stocks/analyse" element={<StockAnalysis />} />
               <Route
                 path="mutual-funds"
                 element={
