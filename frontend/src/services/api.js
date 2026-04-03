@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 
+const defaultApiBaseUrl = `http://${window.location.hostname || 'localhost'}:5000/api`;
+
 const navigateTo = (path) => {
   if (window.location.pathname === path) return;
   window.history.pushState({}, '', path);
@@ -9,7 +11,7 @@ const navigateTo = (path) => {
 
 // Create axios instance
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
+  baseURL: process.env.REACT_APP_API_URL || defaultApiBaseUrl,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
@@ -40,7 +42,7 @@ api.interceptors.response.use(
 
     // Handle network errors
     if (!response) {
-      toast.error('Network error. Please check your connection.');
+      toast.error(`Network error. Backend not reachable at ${api.defaults.baseURL}.`);
       return Promise.reject(error);
     }
 

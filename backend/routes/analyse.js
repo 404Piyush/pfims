@@ -3,6 +3,8 @@ const { body, query } = require('express-validator');
 const YahooFinance = require('yahoo-finance2').default;
 const { auth } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
+const stockLstmService = require('../services/stockLstmService');
+const stockDataService = require('../services/stockDataService');
 
 const router = express.Router();
 const yahooFinance = new YahooFinance();
@@ -158,7 +160,7 @@ const volumeSignal = ({ closes, volumes }) => {
   return { todayVolume: todayVol, avgVolume: avg20, changePercent, signal: 'HOLD', score: 0 };
 };
 
-const buildReasonSummary = ({ rsi, ma, macd, volume }) => {
+const buildReasonSummary = ({ rsi, ma, macd, volume, lstm }) => {
   const parts = [];
 
   if (ma?.signal === 'BUY') parts.push('Strong uptrend across moving averages');
@@ -170,6 +172,16 @@ const buildReasonSummary = ({ rsi, ma, macd, volume }) => {
   if (volume?.signal === 'BUY') parts.push(`High volume (${round(volume.changePercent, 0)}% above average)`);
   if (volume?.signal === 'SELL') parts.push(`High volume on red day (${round(volume.changePercent, 0)}% above average)`);
 
+  if (lstm?.available && Number.isFinite(lstm.changePercent)) {
+    if (String(lstm.signal || '').includes('BUY')) {
+      parts.push(`LSTM projects ${round(lstm.changePercent, 2)}% upside to ${round(lstm.predictedPrice, 2)}`);
+    } else if (String(lstm.signal || '').includes('SELL')) {
+      parts.push(`LSTM projects ${round(Math.abs(lstm.changePercent), 2)}% downside to ${round(lstm.predictedPrice, 2)}`);
+    } else {
+      parts.push(`LSTM projects a flat move near ${round(lstm.predictedPrice, 2)}`);
+    }
+  }
+
   if (rsi?.label && Number.isFinite(rsi.value)) {
     if (rsi.value > 70) parts.push(`RSI elevated at ${round(rsi.value, 0)} — monitor for reversal`);
     else if (rsi.value < 30) parts.push(`RSI low at ${round(rsi.value, 0)} — potential rebound`);
@@ -177,6 +189,60 @@ const buildReasonSummary = ({ rsi, ma, macd, volume }) => {
   }
 
   return parts.filter(Boolean).join(' · ') || 'No strong technical signal';
+};
+
+const categorizeSignal = (signal) => {
+  const normalized = String(signal || '').toUpperCase();
+  if (normalized.includes('BUY')) return 'BUY';
+  if (normalized.includes('SELL')) return 'SELL';
+  return 'HOLD';
+};
+
+const buildSignalConsensus = (items) => {
+  const rows = Array.isArray(items) ? items : [];
+  let buyCount = 0;
+  let sellCount = 0;
+  let holdCount = 0;
+  let buyWeight = 0;
+  let sellWeight = 0;
+
+  rows.forEach((item) => {
+    const signal = categorizeSignal(item?.signal);
+    const weight = Math.abs(Number(item?.score) || 0);
+    if (signal === 'BUY') {
+      buyCount += 1;
+      buyWeight += weight;
+      return;
+    }
+    if (signal === 'SELL') {
+      sellCount += 1;
+      sellWeight += weight;
+      return;
+    }
+    holdCount += 1;
+  });
+
+  const directionalCount = buyCount + sellCount;
+  const disagreementRatio =
+    directionalCount > 0 ? Math.min(buyCount, sellCount) / directionalCount : 0;
+
+  const conflictLevel =
+    disagreementRatio >= 0.45 ? 'high' : disagreementRatio >= 0.25 ? 'medium' : 'low';
+
+  let dominantDirection = 'HOLD';
+  if (buyWeight > sellWeight * 1.15) dominantDirection = 'BUY';
+  if (sellWeight > buyWeight * 1.15) dominantDirection = 'SELL';
+
+  return {
+    buyCount,
+    sellCount,
+    holdCount,
+    buyWeight: round(buyWeight, 2),
+    sellWeight: round(sellWeight, 2),
+    conflictRatio: round(disagreementRatio * 100, 0),
+    conflictLevel,
+    dominantDirection,
+  };
 };
 
 router.get(
@@ -234,17 +300,7 @@ router.post(
         return res.status(400).json({ success: false, message: 'Invalid ticker format' });
       }
 
-      const period2 = new Date();
-      const period1 = new Date(Date.now() - 370 * 24 * 60 * 60 * 1000);
-      const [quote, chart] = await Promise.all([
-        yahooFinance.quote(ticker),
-        yahooFinance.chart(ticker, { period1, period2, interval: '1d' }),
-      ]);
-
-      const quotes = Array.isArray(chart?.quotes) ? chart.quotes : [];
-      const cleaned = quotes
-        .filter((q) => q && q.date && Number.isFinite(q.close) && Number.isFinite(q.volume))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const cleaned = await stockDataService.getHistoricalStockData(ticker);
 
       if (cleaned.length < 200) {
         return res.status(400).json({
@@ -257,11 +313,8 @@ router.post(
       const closes = last200.map((q) => q.close);
       const volumes = last200.map((q) => q.volume);
 
-      const currentPrice = Number.isFinite(quote?.regularMarketPrice)
-        ? quote.regularMarketPrice
-        : closes[closes.length - 1];
-
-      const name = quote?.longName || quote?.shortName || quote?.displayName || ticker;
+      const currentPrice = closes[closes.length - 1];
+      const name = ticker;
 
       const rsiValue = computeRsi14(closes);
       const rsiInfo = rsiSignal(rsiValue);
@@ -308,21 +361,55 @@ router.post(
         score: volumeRaw.score,
       };
 
+      const lstm = await stockLstmService.analyse({
+        ticker,
+        currentPrice,
+        historicalRows: cleaned.map((row) => ({
+          date: row.date,
+          open: row.open,
+          high: row.high,
+          low: row.low,
+          close: row.close,
+          volume: row.volume,
+        })),
+      });
+
       const totalScore = round(
-        (rsi.score || 0) + (movingAverages.score || 0) + (macd.score || 0) + (volume.score || 0),
+        (rsi.score || 0) + (movingAverages.score || 0) + (macd.score || 0) + (volume.score || 0) + (lstm.score || 0),
         2
       );
 
-      const recommendation =
-        totalScore > 3 ? 'BUY' : totalScore < -3 ? 'SELL' : 'HOLD';
-      const confidence = clamp(Math.round((Math.abs(totalScore) / 10) * 100), 0, 100);
+      const consensus = buildSignalConsensus([
+        { signal: rsi.signal, score: rsi.score },
+        { signal: movingAverages.signal, score: movingAverages.score },
+        { signal: macd.signal, score: macd.score },
+        { signal: volume.signal, score: volume.score },
+        { signal: lstm.signal, score: lstm.score },
+      ]);
 
-      const reasonSummary = buildReasonSummary({
+      let recommendation =
+        totalScore > 4 ? 'BUY' : totalScore < -4 ? 'SELL' : 'HOLD';
+      if (consensus.conflictLevel === 'high' && Math.abs(totalScore) < 6) {
+        recommendation = 'HOLD';
+      } else if (consensus.conflictLevel === 'medium' && Math.abs(totalScore) < 4.5) {
+        recommendation = 'HOLD';
+      }
+
+      let confidence = clamp(Math.round((Math.abs(totalScore) / 13) * 100), 0, 100);
+      if (consensus.conflictLevel === 'high') confidence = clamp(confidence - 25, 0, 100);
+      if (consensus.conflictLevel === 'medium') confidence = clamp(confidence - 12, 0, 100);
+
+      const baseReasonSummary = buildReasonSummary({
         rsi,
         ma: movingAverages,
         macd,
         volume,
+        lstm,
       });
+      const reasonSummary =
+        consensus.conflictLevel === 'high'
+          ? `Mixed indicators (${consensus.buyCount} BUY vs ${consensus.sellCount} SELL), so signal is moderated. · ${baseReasonSummary}`
+          : baseReasonSummary;
 
       const rolling20 = computeRollingSMA(closes, 20);
       const rolling50 = computeRollingSMA(closes, 50);
@@ -348,8 +435,28 @@ router.post(
           movingAverages,
           macd,
           volume,
+          lstm,
+        },
+        prediction: lstm?.available ? {
+          forecastDate: lstm.forecastDate,
+          predictedPrice: lstm.predictedPrice,
+          rawPredictedPrice: lstm.rawPredictedPrice,
+          changeAmount: lstm.changeAmount,
+          changePercent: lstm.changePercent,
+          signal: lstm.signal,
+          confidence: lstm.confidence,
+          modelSource: lstm.modelSource,
+          trainedAt: lstm.trainedAt,
+          modelFreshness: lstm.modelFreshness,
+          trainingState: lstm.trainingState,
+          statusMessage: lstm.statusMessage,
+        } : null,
+        forecasts: {
+          overlay: Array.isArray(lstm?.overlaySeries) ? lstm.overlaySeries : [],
+          futureTrend: Array.isArray(lstm?.futureTrend) ? lstm.futureTrend : [],
         },
         totalScore,
+        consensus,
         reasonSummary,
       });
     } catch (error) {

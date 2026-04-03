@@ -47,9 +47,9 @@ const testEmailService = async () => {
 
       console.log('✅ SMTP connection successful');
       console.log(`   - Connection time: ${connectionTime}ms`);
-      console.log(`   - Host: ${process.env.EMAIL_HOST}`);
-      console.log(`   - Port: ${process.env.EMAIL_PORT}`);
-      console.log(`   - Secure: ${process.env.EMAIL_SECURE === 'true'}`);
+      console.log(`   - Host: ${process.env.EMAIL_HOST || 'smtp.gmail.com'}`);
+      console.log(`   - Port: ${process.env.EMAIL_PORT || '465'}`);
+      console.log(`   - Secure: ${process.env.EMAIL_SECURE ? process.env.EMAIL_SECURE === 'true' : true}`);
     } catch (error) {
       console.log('❌ SMTP connection failed');
       console.log(`   - Error: ${error.message}`);
@@ -150,13 +150,8 @@ const testEmailService = async () => {
     console.log('\n🎉 Email service tests completed!');
 
     console.log('\n📋 Email Service Status:');
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔧 Development Mode: Emails sent to Mailtrap');
-      console.log('💡 Check your Mailtrap inbox for test emails');
-    } else {
-      console.log('🚀 Production Mode: Emails sent to real recipients');
-      console.log('⚠️  Be careful with test emails in production');
-    }
+    console.log(`📨 Sender account: ${process.env.EMAIL_FROM || process.env.EMAIL_USER}`);
+    console.log('💡 Gmail requires a valid App Password for successful delivery');
 
   } catch (error) {
     console.error('❌ Email service test failed:', error.message);

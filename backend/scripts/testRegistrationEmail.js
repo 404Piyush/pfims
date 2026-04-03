@@ -1,5 +1,4 @@
 require('dotenv').config();
-const mongoose = require('mongoose');
 const emailService = require('../utils/emailService');
 
 async function testRegistrationEmail() {
@@ -21,7 +20,7 @@ async function testRegistrationEmail() {
     
     if (result.success) {
       console.log('✅ Registration email sent successfully!');
-      console.log('📬 Check your Mailtrap inbox for the verification email');
+      console.log(`📬 Check ${process.env.EMAIL_FROM || process.env.EMAIL_USER} for the verification email status`);
       console.log('🔗 Verification link includes token:', verificationToken);
     } else {
       console.log('❌ Failed to send registration email:', result.error);

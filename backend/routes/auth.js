@@ -9,6 +9,19 @@ const { auth, sensitiveOperationLimit } = require('../middleware/auth');
 const emailService = require('../utils/emailService');
 
 const router = express.Router();
+const emailNormalizationOptions = {
+  all_lowercase: true,
+  gmail_lowercase: true,
+  gmail_remove_dots: false,
+  gmail_remove_subaddress: false,
+  gmail_convert_googlemaildotcom: false,
+  outlookdotcom_lowercase: true,
+  outlookdotcom_remove_subaddress: false,
+  yahoo_lowercase: true,
+  yahoo_remove_subaddress: false,
+  icloud_lowercase: true,
+  icloud_remove_subaddress: false,
+};
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -47,7 +60,7 @@ router.post('/register', [
     .withMessage('Last name must be between 2 and 50 characters'),
   body('email')
     .isEmail()
-    .normalizeEmail()
+    .normalizeEmail(emailNormalizationOptions)
     .withMessage('Please provide a valid email'),
   body('password')
     .isLength({ min: 6 })
@@ -158,7 +171,7 @@ router.post('/register', [
 router.post('/login', [
   body('email')
     .isEmail()
-    .normalizeEmail()
+    .normalizeEmail(emailNormalizationOptions)
     .withMessage('Please provide a valid email'),
   body('password')
     .notEmpty()
@@ -236,7 +249,7 @@ router.post('/login', [
 // @desc    Send OTP for login, registration verification, or forgot password
 // @access  Public (login requires password verification)
 router.post('/otp/send', [
-  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+  body('email').isEmail().normalizeEmail(emailNormalizationOptions).withMessage('Please provide a valid email'),
   body('purpose').isIn(['login', 'register', 'forgot_password']).withMessage('Invalid OTP purpose'),
   body('password').optional().isString().withMessage('Password must be a string')
 ], sensitiveOperationLimit(5 * 60 * 1000, 5), async (req, res) => {
@@ -258,8 +271,13 @@ router.post('/otp/send', [
       return res.status(401).json({ message: 'Account is deactivated. Please contact support.' });
     }
 
-    // Rate-limit resend by interval
-    if (user.otpLastSentAt && Date.now() - new Date(user.otpLastSentAt).getTime() < OTP_RESEND_INTERVAL_MS) {
+    const samePurposeRecentOtp =
+      user.otpPurpose === purpose &&
+      user.otpLastSentAt &&
+      Date.now() - new Date(user.otpLastSentAt).getTime() < OTP_RESEND_INTERVAL_MS;
+
+    // Rate-limit resend by interval for the same OTP purpose
+    if (samePurposeRecentOtp) {
       const waitMs = OTP_RESEND_INTERVAL_MS - (Date.now() - new Date(user.otpLastSentAt).getTime());
       return res.status(429).json({ message: `Please wait ${Math.ceil(waitMs / 1000)}s before requesting another OTP.` });
     }
@@ -269,9 +287,6 @@ router.post('/otp/send', [
       const isMatch = await user.comparePassword(password || '');
       if (!isMatch) {
         return res.status(401).json({ message: 'Invalid credentials' });
-      }
-      if (!user.isEmailVerified) {
-        return res.status(401).json({ message: 'Please verify your email before logging in.', requiresEmailVerification: true });
       }
     } else if (purpose === 'register') {
       if (user.isEmailVerified) {
@@ -306,7 +321,7 @@ router.post('/otp/send', [
 // @desc    Verify OTP for login, registration, or forgot password
 // @access  Public
 router.post('/otp/verify', [
-  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+  body('email').isEmail().normalizeEmail(emailNormalizationOptions).withMessage('Please provide a valid email'),
   body('code').isLength({ min: 4, max: 8 }).withMessage('Invalid OTP code'),
   body('purpose').isIn(['login', 'register', 'forgot_password']).withMessage('Invalid OTP purpose')
 ], sensitiveOperationLimit(5 * 60 * 1000, 10), async (req, res) => {
@@ -356,6 +371,11 @@ router.post('/otp/verify', [
 
     if (purpose === 'login') {
       // Complete login
+      if (!user.isEmailVerified) {
+        user.isEmailVerified = true;
+        user.emailVerificationToken = undefined;
+        user.emailVerificationExpires = undefined;
+      }
       const token = generateToken(user._id);
       user.lastLogin = new Date();
       await user.save();
@@ -408,7 +428,7 @@ router.post('/otp/verify', [
 // @desc    Reset password using OTP (alternative to email token flow)
 // @access  Public
 router.post('/reset-password-by-otp', [
-  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+  body('email').isEmail().normalizeEmail(emailNormalizationOptions).withMessage('Please provide a valid email'),
   body('code').isLength({ min: 4, max: 8 }).withMessage('Invalid OTP code'),
   body('newPassword')
     .isLength({ min: 6 })
@@ -496,7 +516,7 @@ router.get('/me', auth, async (req, res) => {
 router.post('/forgot-password', [
   body('email')
     .isEmail()
-    .normalizeEmail()
+    .normalizeEmail(emailNormalizationOptions)
     .withMessage('Please provide a valid email')
 ], sensitiveOperationLimit(15 * 60 * 1000, 3), async (req, res) => {
   try {
@@ -726,7 +746,7 @@ router.post('/verify-email', [
 router.post('/resend-verification', [
   body('email')
     .isEmail()
-    .normalizeEmail()
+    .normalizeEmail(emailNormalizationOptions)
     .withMessage('Please provide a valid email'),
 ], sensitiveOperationLimit(15 * 60 * 1000, 3), async (req, res) => {
   try {

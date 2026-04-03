@@ -30,6 +30,7 @@ import Assistant from './pages/Assistant/Assistant';
 import Portfolio from './pages/Portfolio/Portfolio';
 import InvestmentProfileOnboarding from './pages/Onboarding/InvestmentProfileOnboarding';
 import StockAnalysis from './pages/Stocks/StockAnalysis';
+import MarketNewsIntelligence from './pages/MarketNews/MarketNewsIntelligence';
 
 // Error pages
 import NotFound from './pages/Error/NotFound';
@@ -122,6 +123,7 @@ function App() {
               <Route path="reports" element={<Reports />} />
               <Route path="portfolio" element={<Portfolio />} />
               <Route path="stocks/analyse" element={<StockAnalysis />} />
+              <Route path="market-news-intelligence" element={<MarketNewsIntelligence />} />
               <Route
                 path="mutual-funds"
                 element={

@@ -1,5 +1,4 @@
 require('dotenv').config();
-const mongoose = require('mongoose');
 const emailService = require('../utils/emailService');
 
 async function testPasswordResetEmail() {
@@ -21,7 +20,7 @@ async function testPasswordResetEmail() {
     
     if (result.success) {
       console.log('✅ Password reset email sent successfully!');
-      console.log('📬 Check your Mailtrap inbox for the password reset email');
+      console.log(`📬 Check ${process.env.EMAIL_FROM || process.env.EMAIL_USER} for the password reset email status`);
       console.log('🔗 Reset link includes token:', resetToken);
     } else {
       console.log('❌ Failed to send password reset email:', result.error);

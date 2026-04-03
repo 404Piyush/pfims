@@ -6,41 +6,38 @@ class EmailService {
   constructor() {
     this.transporter = null;
     this.isConfigured = false;
-    this.mailgunConfigured = false;
     this.initializeTransporter();
   }
 
   initializeTransporter() {
     try {
-      // Detect Mailgun configuration
-      this.mailgunConfigured = !!(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN);
+      const emailUser = process.env.EMAIL_USER;
+      const emailPass = process.env.EMAIL_PASS;
+      const emailHost = process.env.EMAIL_HOST || 'smtp.gmail.com';
+      const emailPort = Number(process.env.EMAIL_PORT || 465);
+      const emailSecure = process.env.EMAIL_SECURE ? process.env.EMAIL_SECURE === 'true' : true;
 
-      // Configure SMTP transporter if credentials provided
-      if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-        this.transporter = nodemailer.createTransport({
-          host: process.env.EMAIL_HOST,
-          port: parseInt(process.env.EMAIL_PORT) || 587,
-          secure: process.env.EMAIL_SECURE === 'true',
-          auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-          },
-          tls: {
-            rejectUnauthorized: process.env.NODE_ENV === 'production'
-          }
-        });
-        this.isConfigured = true;
-        console.log('✅ Email service (SMTP) configured successfully');
-      }
-
-      if (this.mailgunConfigured) {
-        this.isConfigured = true;
-        console.log('✅ Mailgun email service configured');
-      }
-
-      if (!this.isConfigured) {
+      if (!emailUser || !emailPass) {
         console.warn('⚠️ Email configuration not found. Email features will be disabled.');
+        return;
       }
+
+      this.transporter = nodemailer.createTransport({
+        host: emailHost,
+        port: emailPort,
+        secure: emailSecure,
+        auth: {
+          user: emailUser,
+          pass: emailPass,
+        },
+        tls: {
+          rejectUnauthorized: process.env.NODE_ENV === 'production'
+        }
+      });
+
+      this.isConfigured = true;
+      console.log(`✅ Gmail SMTP email service configured (${emailHost}:${emailPort}, secure=${emailSecure})`);
+      console.log(`📨 Emails will be sent from ${process.env.EMAIL_FROM || emailUser}`);
     } catch (error) {
       console.error('❌ Failed to configure email service:', error.message);
       this.isConfigured = false;
@@ -52,87 +49,18 @@ class EmailService {
       return false;
     }
 
-    // If SMTP is available, verify it; Mailgun is HTTP-based and doesn’t offer a verify method
-    if (this.transporter) {
-      try {
-        await this.transporter.verify();
-        console.log('✅ Email server connection verified');
-        return true;
-      } catch (error) {
-        console.error('❌ Email server connection failed:', error.message);
-        return false;
-      }
+    if (!this.transporter) {
+      return false;
     }
 
-    // Mailgun configured but no SMTP – consider configured
-    return true;
-  }
-
-  async sendViaMailgun(to, subject, html, text = null, options = {}) {
-    if (!this.mailgunConfigured) {
-      throw new Error('Mailgun not configured');
+    try {
+      await this.transporter.verify();
+      console.log('✅ Gmail SMTP connection verified');
+      return true;
+    } catch (error) {
+      console.error('❌ Gmail SMTP connection failed:', error.message);
+      return false;
     }
-
-    const apiKey = process.env.MAILGUN_API_KEY;
-    const domain = process.env.MAILGUN_DOMAIN;
-    const from = process.env.MAILGUN_FROM || `"${process.env.EMAIL_FROM_NAME || 'PFIMS'}" <postmaster@${domain}>`;
-
-    const url = `https://api.mailgun.net/v3/${domain}/messages`;
-    const authHeader = 'Basic ' + Buffer.from(`api:${apiKey}`).toString('base64');
-
-    const attachments = Array.isArray(options?.attachments) ? options.attachments : [];
-    const hasAttachments = attachments.length > 0;
-
-    let res;
-    if (hasAttachments) {
-      const form = new FormData();
-      form.append('from', from);
-      form.append('to', to);
-      form.append('subject', subject);
-      if (text) form.append('text', text);
-      if (html) form.append('html', html);
-
-      attachments.forEach((a) => {
-        const filename = a?.filename || 'attachment';
-        const contentType = a?.contentType || 'application/octet-stream';
-        const content = Buffer.isBuffer(a?.content) ? a.content : Buffer.from(a?.content || '');
-        const blob = new Blob([content], { type: contentType });
-        form.append('attachment', blob, filename);
-      });
-
-      res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: authHeader,
-        },
-        body: form,
-      });
-    } else {
-      const params = new URLSearchParams();
-      params.append('from', from);
-      params.append('to', to);
-      params.append('subject', subject);
-      if (text) params.append('text', text);
-      if (html) params.append('html', html);
-
-      res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: authHeader,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params.toString(),
-      });
-    }
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => 'Unknown error');
-      throw new Error(`Mailgun error ${res.status}: ${errText}`);
-    }
-
-    const data = await res.json().catch(() => ({}));
-    console.log('✅ Mailgun email queued:', data.id || '(no id)');
-    return { success: true, messageId: data.id, response: data.message };
   }
 
   async sendEmail(to, subject, html, text = null, options = {}) {
@@ -143,16 +71,6 @@ class EmailService {
     if (!this.isConfigured) {
       console.warn('⚠️ Email service not configured. Skipping email send.');
       return { success: false, error: 'Email service not configured' };
-    }
-
-    // Prefer Mailgun when configured
-    if (this.mailgunConfigured) {
-      try {
-        return await this.sendViaMailgun(to, subject, html, text || this.stripHtml(html), options);
-      } catch (mgError) {
-        console.error('❌ Mailgun send failed, attempting SMTP fallback:', mgError.message);
-        // Fall through to SMTP if available
-      }
     }
 
     if (!this.transporter) {
@@ -170,10 +88,10 @@ class EmailService {
       };
 
       const info = await this.transporter.sendMail(mailOptions);
-      console.log('✅ SMTP email sent:', info.messageId);
+      console.log(`✅ Email sent to ${to}: ${info.messageId}`);
       return { success: true, messageId: info.messageId, response: info.response };
     } catch (error) {
-      console.error('❌ Failed to send email:', error.message);
+      console.error(`❌ Failed to send email to ${to}:`, error.message);
       return { success: false, error: error.message };
     }
   }
@@ -276,6 +194,10 @@ class EmailService {
       'Reset Your Password - PFIMS',
       html
     );
+  }
+
+  async sendPasswordResetEmail(user, resetToken) {
+    return await this.sendPasswordReset(user, resetToken);
   }
 
   async sendBudgetAlertEmail(user, budget, category, alertType) {
@@ -594,7 +516,7 @@ class EmailService {
   }
 
   stripHtml(html) {
-    return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    return (html || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
   }
 
   generateSecureToken() {

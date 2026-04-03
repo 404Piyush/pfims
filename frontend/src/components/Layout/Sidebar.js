@@ -16,6 +16,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ChatBubbleLeftRightIcon,
+  NewspaperIcon,
 } from '@heroicons/react/24/outline';
 import {
   HomeIcon as HomeIconSolid,
@@ -29,6 +30,7 @@ import {
   UserIcon as UserIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
+  NewspaperIcon as NewspaperIconSolid,
 } from '@heroicons/react/24/solid';
 import { toggleSidebar } from '../../store/slices/uiSlice';
 
@@ -74,6 +76,12 @@ const navigation = [
     href: '/stocks/analyse',
     icon: PresentationChartLineIcon,
     iconSolid: PresentationChartLineIconSolid,
+  },
+  {
+    name: 'Market News',
+    href: '/market-news-intelligence',
+    icon: NewspaperIcon,
+    iconSolid: NewspaperIconSolid,
   },
   {
     name: 'Mutual Funds',

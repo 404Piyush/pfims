@@ -6,6 +6,19 @@ const { auth, sensitiveOperationLimit } = require('../middleware/auth');
 const emailService = require('../utils/emailService');
 
 const router = express.Router();
+const emailNormalizationOptions = {
+  all_lowercase: true,
+  gmail_lowercase: true,
+  gmail_remove_dots: false,
+  gmail_remove_subaddress: false,
+  gmail_convert_googlemaildotcom: false,
+  outlookdotcom_lowercase: true,
+  outlookdotcom_remove_subaddress: false,
+  yahoo_lowercase: true,
+  yahoo_remove_subaddress: false,
+  icloud_lowercase: true,
+  icloud_remove_subaddress: false,
+};
 
 const getIntegrationEncryptionKey = (() => {
   let cached = null;
@@ -1303,7 +1316,7 @@ router.put('/profile', [
 router.put('/email', [
   body('email')
     .isEmail()
-    .normalizeEmail()
+    .normalizeEmail(emailNormalizationOptions)
     .withMessage('Please provide a valid email'),
   body('password')
     .notEmpty()
