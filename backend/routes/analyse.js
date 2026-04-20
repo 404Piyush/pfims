@@ -5,7 +5,7 @@ const { auth } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 
 const router = express.Router();
-const yahooFinance = new YahooFinance();
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 

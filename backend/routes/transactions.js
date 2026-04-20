@@ -705,26 +705,32 @@ router.post('/import/bank-statement/ai-categorize', [
       });
     }
 
-    const atlasUrl = process.env.ATLAS_API_URL || 'https://api.atlascloud.ai/v1/chat/completions';
-    const atlasApiKey = process.env.ATLASCLOUD_API_KEY;
-    const atlasModel = process.env.ATLAS_MODEL || 'zai-org/GLM-4.5-Air';
+    const openrouterUrl = process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1/chat/completions';
+    const openrouterApiKey = process.env.OPENROUTER_API_KEY || process.env.ATLASCLOUD_API_KEY;
+    const openrouterModel = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+    const openrouterReferer = process.env.OPENROUTER_REFERER || process.env.CLIENT_URL;
+    const openrouterAppName = process.env.OPENROUTER_APP_NAME || 'PFIMS';
     const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434/api/chat';
     const ollamaModel = process.env.OLLAMA_MODEL_LITE || process.env.OLLAMA_MODEL || 'meta-llama-3-8b-instruct-q4km';
 
-    const timeoutMs = Number(process.env.ATLAS_TIMEOUT_MS || 55000);
+    const timeoutMs = Number(process.env.OPENROUTER_TIMEOUT_MS || process.env.ATLAS_TIMEOUT_MS || 55000);
     const chunkSizeRaw = Number(process.env.AI_CATEGORIZE_CHUNK_SIZE || 50);
     const chunkSize = Number.isFinite(chunkSizeRaw) ? Math.max(10, Math.min(50, chunkSizeRaw)) : 50;
 
     const callAi = async (prompt) => {
-      const tryAtlas = async () => {
-        const resp = await fetchWithTimeout(atlasUrl, {
+      const tryOpenRouter = async () => {
+        const headers = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openrouterApiKey}`,
+        };
+        if (openrouterReferer) headers['HTTP-Referer'] = String(openrouterReferer);
+        if (openrouterAppName) headers['X-Title'] = String(openrouterAppName);
+
+        const resp = await fetchWithTimeout(openrouterUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${atlasApiKey}`,
-          },
+          headers,
           body: JSON.stringify({
-            model: atlasModel,
+            model: openrouterModel,
             messages: [
               { role: 'system', content: 'Return only valid JSON.' },
               { role: 'user', content: prompt },
@@ -733,7 +739,6 @@ router.post('/import/bank-statement/ai-categorize', [
             temperature: 0.2,
             top_p: 0.9,
             stream: false,
-            systemPrompt: '',
           }),
         }, timeoutMs);
 
@@ -772,9 +777,9 @@ router.post('/import/bank-statement/ai-categorize', [
         return data?.message?.content || data?.content || data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || '';
       };
 
-      if (atlasApiKey) {
+      if (openrouterApiKey) {
         try {
-          return await tryAtlas();
+          return await tryOpenRouter();
         } catch (e) {
           return await tryOllama();
         }
@@ -977,12 +982,12 @@ router.post('/import/bank-statement/ai-categorize', [
       error?.cause?.code === 'ECONNREFUSED' ||
       error?.cause?.code === 'ENOTFOUND';
     const isAiServiceError = error?.message === 'AI service error';
-    const hasAtlasKey = Boolean(process.env.ATLASCLOUD_API_KEY);
+    const hasOpenRouterKey = Boolean(process.env.OPENROUTER_API_KEY || process.env.ATLASCLOUD_API_KEY);
     const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434/api/chat';
     const hint =
-      !hasAtlasKey && String(ollamaUrl).includes('localhost:11434')
-        ? 'Configure ATLASCLOUD_API_KEY or start Ollama at http://localhost:11434'
-        : (!hasAtlasKey ? 'Configure ATLASCLOUD_API_KEY or OLLAMA_URL' : 'Check ATLAS_API_URL/ATLASCLOUD_API_KEY and connectivity');
+      !hasOpenRouterKey && String(ollamaUrl).includes('localhost:11434')
+        ? 'Configure OPENROUTER_API_KEY or start Ollama at http://localhost:11434'
+        : (!hasOpenRouterKey ? 'Configure OPENROUTER_API_KEY or OLLAMA_URL' : 'Check OPENROUTER_API_URL/OPENROUTER_API_KEY and connectivity');
 
     res.status(isAiUnreachable || isAiServiceError ? 502 : 500).json({
       success: false,

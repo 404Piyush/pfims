@@ -94,6 +94,17 @@ function sha256Hex(input) {
   return crypto.createHash('sha256').update(input).digest('hex');
 }
 
+const isGrowwSessionApprovalRequired = (err) => {
+  if (err?.status !== 403) return false;
+  const msg =
+    (typeof err?.data?.error?.errorMessage === 'string' ? err.data.error.errorMessage : '') ||
+    (typeof err?.message === 'string' ? err.message : '');
+  return msg.toLowerCase().includes('session approval required');
+};
+
+const growwErrorLogWindowMs = 10 * 60 * 1000;
+const lastGrowwSessionApprovalLogAtByUser = new Map();
+
 async function requestJson({ method, url, headers, body }) {
   const res = await fetch(url, {
     method,
@@ -674,20 +685,28 @@ async function buildMutualFundRecommendations({ profile, allocation }) {
 async function getGrowwAccessToken({ apiKey, apiSecret }) {
   const timestamp = String(Math.floor(Date.now() / 1000));
   const checksum = sha256Hex(`${apiSecret}${timestamp}`);
-  const tokenRes = await requestJson({
-    method: 'POST',
-    url: 'https://api.groww.in/v1/token/api/access',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: {
-      key_type: 'approval',
-      checksum,
-      timestamp,
-    },
-  });
+  let tokenRes;
+  try {
+    tokenRes = await requestJson({
+      method: 'POST',
+      url: 'https://api.groww.in/v1/token/api/access',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: {
+        key_type: 'approval',
+        checksum,
+        timestamp,
+      },
+    });
+  } catch (err) {
+    if (isGrowwSessionApprovalRequired(err)) {
+      err.code = 'GROWW_SESSION_APPROVAL_REQUIRED';
+    }
+    throw err;
+  }
   return tokenRes?.payload?.token || tokenRes?.token;
 }
 
@@ -1720,6 +1739,26 @@ router.get('/portfolio/groww', auth, async (req, res) => {
       data: { ...data, account: { id: account?.id, label: account?.label } },
     });
   } catch (error) {
+    if (error?.code === 'GROWW_SESSION_APPROVAL_REQUIRED') {
+      const key = String(req.user?._id || 'unknown');
+      const last = lastGrowwSessionApprovalLogAtByUser.get(key) || 0;
+      const now = Date.now();
+      if (now - last > growwErrorLogWindowMs) {
+        lastGrowwSessionApprovalLogAtByUser.set(key, now);
+        console.warn('Fetch Groww portfolio blocked: session approval required', {
+          userId: key,
+          status: error?.status,
+        });
+      }
+      return res.status(403).json({
+        message: 'Groww session approval required',
+        details: {
+          code: 'GROWW_SESSION_APPROVAL_REQUIRED',
+          hint: 'Approve the API session in Groww before generating an access token, then retry.',
+        },
+      });
+    }
+
     console.error('Fetch Groww portfolio error:', error);
     res.status(502).json({
       message: 'Failed to fetch Groww portfolio',
@@ -1795,6 +1834,26 @@ router.get('/portfolio/groww/holdings-list', auth, async (req, res) => {
       },
     });
   } catch (error) {
+    if (error?.code === 'GROWW_SESSION_APPROVAL_REQUIRED') {
+      const key = String(req.user?._id || 'unknown');
+      const last = lastGrowwSessionApprovalLogAtByUser.get(key) || 0;
+      const now = Date.now();
+      if (now - last > growwErrorLogWindowMs) {
+        lastGrowwSessionApprovalLogAtByUser.set(key, now);
+        console.warn('Fetch Groww holdings blocked: session approval required', {
+          userId: key,
+          status: error?.status,
+        });
+      }
+      return res.status(403).json({
+        message: 'Groww session approval required',
+        details: {
+          code: 'GROWW_SESSION_APPROVAL_REQUIRED',
+          hint: 'Approve the API session in Groww before generating an access token, then retry.',
+        },
+      });
+    }
+
     res.status(502).json({
       message: 'Failed to fetch Groww holdings',
       details: {
@@ -1893,6 +1952,26 @@ router.get('/portfolio/groww/holding', auth, async (req, res) => {
       },
     });
   } catch (error) {
+    if (error?.code === 'GROWW_SESSION_APPROVAL_REQUIRED') {
+      const key = String(req.user?._id || 'unknown');
+      const last = lastGrowwSessionApprovalLogAtByUser.get(key) || 0;
+      const now = Date.now();
+      if (now - last > growwErrorLogWindowMs) {
+        lastGrowwSessionApprovalLogAtByUser.set(key, now);
+        console.warn('Fetch Groww holding blocked: session approval required', {
+          userId: key,
+          status: error?.status,
+        });
+      }
+      return res.status(403).json({
+        message: 'Groww session approval required',
+        details: {
+          code: 'GROWW_SESSION_APPROVAL_REQUIRED',
+          hint: 'Approve the API session in Groww before generating an access token, then retry.',
+        },
+      });
+    }
+
     res.status(502).json({
       message: 'Failed to fetch Groww holding',
       details: {
@@ -2024,6 +2103,26 @@ router.get('/market/groww/history', auth, async (req, res) => {
       },
     });
   } catch (error) {
+    if (error?.code === 'GROWW_SESSION_APPROVAL_REQUIRED') {
+      const key = String(req.user?._id || 'unknown');
+      const last = lastGrowwSessionApprovalLogAtByUser.get(key) || 0;
+      const now = Date.now();
+      if (now - last > growwErrorLogWindowMs) {
+        lastGrowwSessionApprovalLogAtByUser.set(key, now);
+        console.warn('Fetch Groww historical candles blocked: session approval required', {
+          userId: key,
+          status: error?.status,
+        });
+      }
+      return res.status(403).json({
+        message: 'Groww session approval required',
+        details: {
+          code: 'GROWW_SESSION_APPROVAL_REQUIRED',
+          hint: 'Approve the API session in Groww before generating an access token, then retry.',
+        },
+      });
+    }
+
     res.status(502).json({
       message: 'Failed to fetch historical candles',
       details: {

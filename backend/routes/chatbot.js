@@ -137,7 +137,7 @@ router.post(
     body('provider')
       .optional()
       .isString()
-      .withMessage('provider must be a string ("ollama" or "atlas")'),
+      .withMessage('provider must be a string ("ollama" or "openrouter")'),
     body('sessionId')
       .optional({ nullable: true, checkFalsy: true })
       .isMongoId()
@@ -149,18 +149,30 @@ router.post(
     try {
       const { message, extraContext = '', history = [], includeContext = true, debug = false, lite = false, sessionId: clientSessionId } = req.body;
       const shouldDebug = debug || DEBUG_LOG;
-      const provider = 'atlas';
       const userId = req.user?._id || req.user?.id || 'unknown';
       const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434/api/chat';
       const baseModel = process.env.OLLAMA_MODEL || 'meta-llama-3-8b-instruct-q4km';
       const liteModel = process.env.OLLAMA_MODEL_LITE || baseModel;
-      const atlasUrl = process.env.ATLAS_API_URL || 'https://api.atlascloud.ai/v1/chat/completions';
-      const atlasApiKey = process.env.ATLASCLOUD_API_KEY;
-      const atlasBaseModel = process.env.ATLAS_MODEL || 'zai-org/GLM-4.5-Air';
-      const model = lite ? (provider === 'atlas' ? atlasBaseModel : liteModel) : (provider === 'atlas' ? atlasBaseModel : baseModel);
+      const openrouterUrl = process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1/chat/completions';
+      const openrouterApiKey = process.env.OPENROUTER_API_KEY || process.env.ATLASCLOUD_API_KEY;
+      const openrouterBaseModel = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+      const openrouterReferer = process.env.OPENROUTER_REFERER || process.env.CLIENT_URL;
+      const openrouterAppName = process.env.OPENROUTER_APP_NAME || 'PFIMS';
+
+      const requestedProvider = String(req.body?.provider || '').trim().toLowerCase();
+      const provider =
+        requestedProvider === 'ollama'
+          ? 'ollama'
+          : (requestedProvider === 'atlas' || requestedProvider === 'openrouter')
+            ? 'openrouter'
+            : (openrouterApiKey ? 'openrouter' : 'ollama');
+
+      const model = lite
+        ? (provider === 'openrouter' ? openrouterBaseModel : liteModel)
+        : (provider === 'openrouter' ? openrouterBaseModel : baseModel);
 
       // Timeouts tuned with frontend's chatbot request timeout
-      const atlasTimeoutMs = Number(process.env.ATLAS_TIMEOUT_MS || 55000);
+      const openrouterTimeoutMs = Number(process.env.OPENROUTER_TIMEOUT_MS || process.env.ATLAS_TIMEOUT_MS || 55000);
       const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS || 45000);
       const fallbackTimeoutMs = Number(process.env.FALLBACK_TIMEOUT_MS || 30000);
 
@@ -216,12 +228,12 @@ router.post(
         num_batch: Number(process.env.OLLAMA_NUM_BATCH || (lite ? 16 : 32))
       };
 
-      const atlasOptions = {
-        temperature: Number(process.env.ATLAS_TEMPERATURE || 0.7),
-        max_tokens: Number(process.env.ATLAS_MAX_TOKENS || (lite ? 4096 : 8192)),
-        top_p: Number(process.env.ATLAS_TOP_P || 0.9),
-        top_k: Number(process.env.ATLAS_TOP_K || 50),
-        repetition_penalty: Number(process.env.ATLAS_REPETITION_PENALTY || 1.1)
+      const openrouterOptions = {
+        temperature: Number(process.env.OPENROUTER_TEMPERATURE || 0.7),
+        max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || (lite ? 2048 : 4096)),
+        top_p: Number(process.env.OPENROUTER_TOP_P || 0.9),
+        top_k: Number(process.env.OPENROUTER_TOP_K || 50),
+        repetition_penalty: Number(process.env.OPENROUTER_REPETITION_PENALTY || 1.1)
       };
 
       if (shouldDebug) {
@@ -230,90 +242,93 @@ router.post(
           provider,
           lite,
           includeContext,
-          atlasTimeoutMs,
+          openrouterTimeoutMs,
           historyCount: Array.isArray(filteredHistory) ? filteredHistory.length : 0
         });
       }
 
       const start = Date.now();
       let response;
-      let atlasReqStart;
-      let atlasReqEnd;
-      const aiEndpoint = provider === 'atlas' ? atlasUrl : ollamaUrl;
+      let openrouterReqStart;
+      let openrouterReqEnd;
+      const aiEndpoint = provider === 'openrouter' ? openrouterUrl : ollamaUrl;
 
       // Replace provider-specific fetches with timeout-wrapped calls and Atlas fallback on timeout
-      if (provider === 'atlas') {
-        if (!atlasApiKey) {
+      if (provider === 'openrouter') {
+        if (!openrouterApiKey) {
           return res.status(500).json({
             success: false,
-            message: 'AtlasCloud API key not configured'
+            message: 'OpenRouter API key not configured'
           });
         }
         try {
-          atlasReqStart = Date.now();
+          openrouterReqStart = Date.now();
           if (shouldDebug) {
-            console.info('Chatbot[atlas] request start', {
+            console.info('Chatbot[openrouter] request start', {
               userId,
               model,
-              timeoutMs: atlasTimeoutMs,
+              timeoutMs: openrouterTimeoutMs,
               historyCount: Array.isArray(filteredHistory) ? filteredHistory.length : 0,
               lite
             });
           }
-          response = await fetchWithTimeout(atlasUrl, {
+          const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openrouterApiKey}`
+          };
+          if (openrouterReferer) headers['HTTP-Referer'] = String(openrouterReferer);
+          if (openrouterAppName) headers['X-Title'] = String(openrouterAppName);
+
+          response = await fetchWithTimeout(openrouterUrl, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${atlasApiKey}`
-            },
+            headers,
             body: JSON.stringify({
               model,
               messages,
-              max_tokens: atlasOptions.max_tokens,
-              temperature: atlasOptions.temperature,
-              top_p: atlasOptions.top_p,
-              top_k: atlasOptions.top_k,
-              repetition_penalty: atlasOptions.repetition_penalty,
+              max_tokens: openrouterOptions.max_tokens,
+              temperature: openrouterOptions.temperature,
+              top_p: openrouterOptions.top_p,
+              top_k: openrouterOptions.top_k,
+              repetition_penalty: openrouterOptions.repetition_penalty,
               stream: false,
-              systemPrompt: ''
             })
-          }, atlasTimeoutMs);
-          atlasReqEnd = Date.now();
+          }, openrouterTimeoutMs);
+          openrouterReqEnd = Date.now();
           if (shouldDebug) {
-            console.info('Chatbot[atlas] response received', {
+            console.info('Chatbot[openrouter] response received', {
               status: response.status,
-              durationMs: atlasReqEnd - atlasReqStart
+              durationMs: openrouterReqEnd - openrouterReqStart
             });
           }
-        } catch (atlasErr) {
-          const elapsed = atlasReqStart ? Date.now() - atlasReqStart : undefined;
-          console.warn('Chatbot[atlas] timeout/abort', {
-            name: atlasErr?.name,
-            message: atlasErr?.message,
+        } catch (openrouterErr) {
+          const elapsed = openrouterReqStart ? Date.now() - openrouterReqStart : undefined;
+          console.warn('Chatbot[openrouter] timeout/abort', {
+            name: openrouterErr?.name,
+            message: openrouterErr?.message,
             elapsedMs: elapsed,
-            timeoutMs: atlasTimeoutMs
+            timeoutMs: openrouterTimeoutMs
           });
           if (!ENABLE_ATLAS_FALLBACK) {
             return res.status(502).json({
               success: false,
-              message: 'AI service error (Atlas timeout)',
-              details: atlasErr?.message || 'Atlas request timed out',
+              message: 'AI service error (OpenRouter timeout)',
+              details: openrouterErr?.message || 'OpenRouter request timed out',
               sessionId: session?._id,
               meta: shouldDebug ? {
                 userId,
-                provider: 'atlas',
-                aiEndpoint: atlasUrl,
+                provider: 'openrouter',
+                aiEndpoint: openrouterUrl,
                 model,
                 mode: lite ? 'lite' : 'default',
                 maxHistory: lite ? 6 : MAX_HISTORY_ITEMS_DEFAULT,
                 durationMs: elapsed,
-                timeouts: { atlasTimeoutMs, fallbackTimeoutMs, ollamaTimeoutMs },
-                timings: { start, requestStart: atlasReqStart, requestEnd: Date.now() },
-                error: { name: atlasErr?.name, message: atlasErr?.message }
+                timeouts: { openrouterTimeoutMs, fallbackTimeoutMs, ollamaTimeoutMs },
+                timings: { start, requestStart: openrouterReqStart, requestEnd: Date.now() },
+                error: { name: openrouterErr?.name, message: openrouterErr?.message }
               } : undefined
             });
           }
-          // Timeout or network error contacting Atlas: fallback to Ollama with a shorter timeout
+          // Timeout or network error contacting OpenRouter: fallback to Ollama with a shorter timeout
           try {
             const fbStart = Date.now();
             const fbResp = await fetchWithTimeout(ollamaUrl, {
@@ -343,10 +358,10 @@ router.post(
                     durationMs: fbDurationMs,
                     mode: lite ? 'lite' : 'default',
                     maxHistory: lite ? 6 : MAX_HISTORY_ITEMS_DEFAULT,
-                    timeouts: { atlasTimeoutMs, fallbackTimeoutMs, ollamaTimeoutMs },
+                    timeouts: { openrouterTimeoutMs, fallbackTimeoutMs, ollamaTimeoutMs },
                     fallback: {
-                      from: 'atlas',
-                      reason: `exception=${atlasErr?.name || 'error'}:${(atlasErr?.message || '').slice(0,64)}`
+                      from: 'openrouter',
+                      reason: `exception=${openrouterErr?.name || 'error'}:${(openrouterErr?.message || '').slice(0,64)}`
                     },
                     stats: {
                       prompt_eval_count: fbData?.prompt_eval_count,
@@ -372,8 +387,8 @@ router.post(
           }
           return res.status(502).json({
             success: false,
-            message: 'AI service error (Atlas timeout)',
-            details: atlasErr?.message || 'Atlas request timed out',
+            message: 'AI service error (OpenRouter timeout)',
+            details: openrouterErr?.message || 'OpenRouter request timed out',
             sessionId: session?._id
           });
         }
@@ -402,7 +417,7 @@ router.post(
         const errText = await response.text();
         const statusCode = response.status;
         const contentType = response.headers?.get ? (response.headers.get('content-type') || '') : '';
-        const shouldFallback = ENABLE_ATLAS_FALLBACK && provider === 'atlas' && (
+        const shouldFallback = ENABLE_ATLAS_FALLBACK && provider === 'openrouter' && (
           statusCode === 402 ||
           statusCode >= 500 ||
           contentType.includes('text/html')
@@ -438,9 +453,9 @@ router.post(
                     durationMs: fbDurationMs,
                     mode: lite ? 'lite' : 'default',
                     maxHistory: lite ? 6 : MAX_HISTORY_ITEMS_DEFAULT,
-                    timeouts: { atlasTimeoutMs, fallbackTimeoutMs, ollamaTimeoutMs },
+                    timeouts: { openrouterTimeoutMs, fallbackTimeoutMs, ollamaTimeoutMs },
                     fallback: {
-                      from: 'atlas',
+                      from: 'openrouter',
                       reason: `status=${statusCode}; contentType=${contentType.slice(0,64)}`
                     },
                     stats: {
@@ -472,7 +487,7 @@ router.post(
           status: response.status,
           durationMs,
           model,
-          options: provider === 'atlas' ? atlasOptions : options,
+          options: provider === 'openrouter' ? openrouterOptions : options,
           aiEndpoint,
           provider,
           errText: errText?.slice(0, 1000)
@@ -482,7 +497,7 @@ router.post(
           message: 'AI service error',
           details: errText,
           sessionId: session?._id,
-          meta: shouldDebug ? { userId, model, options: provider === 'atlas' ? atlasOptions : options, aiEndpoint, provider, status: response.status, durationMs, mode: lite ? 'lite' : 'default', maxHistory: lite ? 6 : MAX_HISTORY_ITEMS_DEFAULT, timeouts: { atlasTimeoutMs, fallbackTimeoutMs, ollamaTimeoutMs } } : undefined
+          meta: shouldDebug ? { userId, model, options: provider === 'openrouter' ? openrouterOptions : options, aiEndpoint, provider, status: response.status, durationMs, mode: lite ? 'lite' : 'default', maxHistory: lite ? 6 : MAX_HISTORY_ITEMS_DEFAULT, timeouts: { openrouterTimeoutMs, fallbackTimeoutMs, ollamaTimeoutMs } } : undefined
         });
       }
 
@@ -501,25 +516,29 @@ router.post(
           ];
 
           const contResponse =
-            provider === 'atlas'
-              ? await fetchWithTimeout(atlasUrl, {
+            provider === 'openrouter'
+              ? await fetchWithTimeout(openrouterUrl, {
                   method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${atlasApiKey}`
-                  },
+                  headers: (() => {
+                    const headers = {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${openrouterApiKey}`
+                    };
+                    if (openrouterReferer) headers['HTTP-Referer'] = String(openrouterReferer);
+                    if (openrouterAppName) headers['X-Title'] = String(openrouterAppName);
+                    return headers;
+                  })(),
                   body: JSON.stringify({
                     model,
                     messages: contMessages,
-                    max_tokens: Math.min(2048, atlasOptions.max_tokens),
-                    temperature: atlasOptions.temperature,
-                    top_p: atlasOptions.top_p,
-                    top_k: atlasOptions.top_k,
-                    repetition_penalty: atlasOptions.repetition_penalty,
+                    max_tokens: Math.min(2048, openrouterOptions.max_tokens),
+                    temperature: openrouterOptions.temperature,
+                    top_p: openrouterOptions.top_p,
+                    top_k: openrouterOptions.top_k,
+                    repetition_penalty: openrouterOptions.repetition_penalty,
                     stream: false,
-                    systemPrompt: ''
                   })
-                }, atlasTimeoutMs)
+                }, openrouterTimeoutMs)
               : await fetchWithTimeout(ollamaUrl, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -555,7 +574,7 @@ router.post(
           userId,
           durationMs,
           model,
-          options: provider === 'atlas' ? atlasOptions : options,
+          options: provider === 'openrouter' ? openrouterOptions : options,
           aiEndpoint,
           provider,
           prompt_eval_count: data?.prompt_eval_count,
@@ -573,14 +592,14 @@ router.post(
           meta: shouldDebug ? {
             userId,
             model,
-            options: provider === 'atlas' ? atlasOptions : options,
+            options: provider === 'openrouter' ? openrouterOptions : options,
             aiEndpoint,
             provider,
             durationMs,
             mode: lite ? 'lite' : 'default',
             maxHistory: lite ? 6 : MAX_HISTORY_ITEMS_DEFAULT,
-            timeouts: { atlasTimeoutMs, fallbackTimeoutMs, ollamaTimeoutMs },
-            timings: { start, requestStart: atlasReqStart, requestEnd: atlasReqEnd },
+            timeouts: { openrouterTimeoutMs, fallbackTimeoutMs, ollamaTimeoutMs },
+            timings: { start, requestStart: openrouterReqStart, requestEnd: openrouterReqEnd },
             stats: {
               prompt_eval_count: data?.prompt_eval_count,
               eval_count: data?.eval_count,
