@@ -7,12 +7,17 @@ const navigateTo = (path) => {
   window.dispatchEvent(new PopStateEvent('popstate'));
 };
 
-// Read the XSRF cookie value. csrf-csrf writes `pfims_csrf` readable by JS.
+// Read the CSRF cookie. csrf-csrf stores the value as `token|hash`; the
+// server compares ONLY the left half against the `X-CSRF-Token` header.
 function readCsrfCookie() {
   const name = 'pfims_csrf=';
   for (const c of (document.cookie || '').split(';')) {
     const trimmed = c.trim();
-    if (trimmed.startsWith(name)) return decodeURIComponent(trimmed.slice(name.length));
+    if (trimmed.startsWith(name)) {
+      const raw = decodeURIComponent(trimmed.slice(name.length));
+      const token = raw.split('|')[0];
+      if (token) return token;
+    }
   }
   return '';
 }

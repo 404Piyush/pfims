@@ -196,6 +196,11 @@ try {
     getSecret: () => process.env.CSRF_SECRET || process.env.JWT_SECRET,
     cookieName: 'pfims_csrf',
     cookieOptions: {
+      // The SPA mirrors the token into the `X-CSRF-Token` header, so the
+      // cookie has to be readable from `document.cookie`. The double-submit
+      // pattern still holds because the token only matters for cross-site
+      // POSTs — first-party requests can read it freely.
+      httpOnly: false,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
       path: '/',
