@@ -3,18 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { format, parseISO } from 'date-fns';
 import {
-  PlusIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-  BanknotesIcon,
-  CreditCardIcon,
-  ChartBarIcon,
-  EyeIcon,
-} from '@heroicons/react/24/outline';
+  Plus,
+  CreditCard,
+  Eye,
+} from 'lucide-react';
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
-import AuroraScreen from '../../components/layout/AuroraScreen';
 import NumberStat from '../../components/ui/NumberStat';
+import BrutalCard from '../../components/ui/BrutalCard';
 import api from '../../services/api';
 
 const pctChange = (current, previous) => {
@@ -222,29 +218,6 @@ const Dashboard = () => {
     }).format(amount);
   };
 
-  const StatCard = ({ title, value, change, icon: Icon, color = 'primary', trend }) => (
-    <div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-secondary-600">{title}</p>
-          <p className="text-2xl font-bold text-secondary-900 mt-1">{value}</p>
-          {change && (
-            <div className={`flex items-center mt-2 text-sm ${
-              trend === 'up' ? 'text-success-600' : trend === 'down' ? 'text-danger-600' : 'text-secondary-600'
-            }`}>
-              {trend === 'up' && <ArrowTrendingUpIcon className="h-4 w-4 mr-1" />}
-              {trend === 'down' && <ArrowTrendingDownIcon className="h-4 w-4 mr-1" />}
-              {change}
-            </div>
-          )}
-        </div>
-        <div className={`p-3 rounded-lg bg-${color}-100`}>
-          <Icon className={`h-6 w-6 text-${color}-600`} />
-        </div>
-      </div>
-    </div>
-  );
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -254,15 +227,15 @@ const Dashboard = () => {
   }
 
   return (
-    <AuroraScreen>
-    <div className="space-y-6 text-white">
+    <div className="space-y-6 text-brutal-ink">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b-4 border-brutal-ink pb-5">
         <div>
-          <h1 className="text-2xl font-bold text-white">
-            Welcome back, {user?.firstName}!
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-brutal-ink/60">Dashboard</p>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-brutal-ink">
+            Welcome back, {user?.firstName}<span className="text-brutal-accent">.</span>
           </h1>
-          <p className="text-white/75 mt-1">
+          <p className="text-brutal-ink/70 mt-1">
             Here's your financial overview for {dashboardData.rangeLabel || format(new Date(), 'MMMM yyyy')}
           </p>
         </div>
@@ -270,7 +243,7 @@ const Dashboard = () => {
           <select
             value={selectedPeriod}
             onChange={(e) => setSelectedPeriod(e.target.value)}
-            className="px-3 py-2 border border-white/15 bg-white/[0.06] text-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan"
+            className="px-3 py-2 border-2 border-brutal-ink bg-brutal-paper text-brutal-ink text-sm font-bold focus:outline-none focus:bg-amber-50"
           >
             <option value="week">This Week</option>
             <option value="month">This Month</option>
@@ -279,35 +252,39 @@ const Dashboard = () => {
           </select>
           <button
             onClick={() => navigate('/transactions/new')}
-            className="inline-flex items-center gap-2 rounded-md bg-gradient-to-br from-brand-indigo via-brand-cyan to-brand-pink px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity"
+            className="inline-flex items-center gap-2 bg-brutal-ink text-brutal-paper border-2 border-brutal-ink px-4 py-2 text-sm font-bold uppercase tracking-[0.14em] shadow-[4px_4px_0_0_#0a0a0a] hover:shadow-[2px_2px_0_0_#0a0a0a] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px] transition-all"
           >
-            <PlusIcon className="h-4 w-4" />
+            <Plus size={16} />
             <span>Add Transaction</span>
           </button>
         </div>
       </div>
 
-      {/* KPI cards (aurora glass + tabular numbers) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <NumberStat
+          variant="brutal"
           label="Net Cash Flow"
           value={formatCurrency(dashboardData.summary.net).replace(/^./, (c) => c)}
           delta={Number(dashboardData.changes?.net)}
-          trend="previous period"
+          trend="prev period"
         />
         <NumberStat
+          variant="brutal"
           label="Income"
           value={formatCurrency(dashboardData.summary.income).replace(/^./, (c) => c)}
           delta={Number(dashboardData.changes?.income)}
-          trend="previous period"
+          trend="prev period"
         />
         <NumberStat
+          variant="brutal"
           label="Expenses"
           value={formatCurrency(dashboardData.summary.expenses).replace(/^./, (c) => c)}
           delta={Number(dashboardData.changes?.expenses)}
-          trend="previous period"
+          trend="prev period"
         />
         <NumberStat
+          variant="brutal"
           label="Savings Rate"
           value={`${(Number(dashboardData.summary.savingsRate) || 0).toFixed(1)}`}
           suffix="%"
@@ -316,148 +293,134 @@ const Dashboard = () => {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Monthly Trend Chart */}
-        <div className="rounded-xl border border-white/10 bg-white/[0.05] backdrop-blur-xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-white">
+        <BrutalCard className="p-6">
+          <div className="flex items-center justify-between border-b-2 border-brutal-ink pb-3 mb-5">
+            <h3 className="text-base font-extrabold tracking-tight text-brutal-ink uppercase">
               Income vs Expenses
             </h3>
-            <button className="text-sm text-brand-cyan hover:text-white font-medium">
-              View Details
+            <button className="text-[11px] font-bold uppercase tracking-[0.14em] text-brutal-ink underline underline-offset-2 decoration-2 decoration-brutal-accent">
+              Details
             </button>
           </div>
-          <div className="h-80">
+          <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={dashboardData.trend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="label" stroke="#64748b" fontSize={12} />
-                <YAxis stroke="#64748b" fontSize={12} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#0a0a0a22" />
+                <XAxis dataKey="label" stroke="#0a0a0a" fontSize={11} tick={{ fill: '#0a0a0a', fontWeight: 600 }} />
+                <YAxis stroke="#0a0a0a" fontSize={11} tick={{ fill: '#0a0a0a', fontWeight: 600 }} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'white',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    backgroundColor: '#f5f5f0',
+                    border: '2px solid #0a0a0a',
+                    borderRadius: 0,
+                    boxShadow: '4px 4px 0 0 #0a0a0a',
+                    color: '#0a0a0a',
+                    fontFamily: 'Geist, sans-serif',
                   }}
                   formatter={(value) => [formatCurrency(value), '']}
                 />
-                <Area
-                  type="monotone"
-                  dataKey="income"
-                  stackId="1"
-                  stroke="#22c55e"
-                  fill="#22c55e"
-                  fillOpacity={0.6}
-                  name="Income"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="expenses"
-                  stackId="2"
-                  stroke="#ef4444"
-                  fill="#ef4444"
-                  fillOpacity={0.6}
-                  name="Expenses"
-                />
+                <Area type="monotone" dataKey="income" stackId="1" stroke="#0a0a0a" fill="#0a0a0a" fillOpacity={1} strokeWidth={2} name="Income" />
+                <Area type="monotone" dataKey="expenses" stackId="2" stroke="#ff3b3b" fill="#ff3b3b" fillOpacity={1} strokeWidth={2} strokeDasharray="6 3" name="Expenses" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </BrutalCard>
 
         {/* Category Breakdown */}
-        <div className="rounded-xl border border-white/10 bg-white/[0.05] backdrop-blur-xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-white">
+        <BrutalCard className="p-6">
+          <div className="flex items-center justify-between border-b-2 border-brutal-ink pb-3 mb-5">
+            <h3 className="text-base font-extrabold tracking-tight text-brutal-ink uppercase">
               Expense Categories
             </h3>
-            <button className="text-sm text-brand-cyan hover:text-white font-medium">
+            <button className="text-[11px] font-bold uppercase tracking-[0.14em] text-brutal-ink underline underline-offset-2 decoration-2 decoration-brutal-accent">
               View All
             </button>
           </div>
-          <div className="h-80">
+          <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={dashboardData.categoryBreakdown}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={120}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
+                <Pie data={dashboardData.categoryBreakdown} cx="50%" cy="50%" innerRadius={50} outerRadius={100} paddingAngle={2} dataKey="value" stroke="#0a0a0a" strokeWidth={2}>
                   {dashboardData.categoryBreakdown.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => [formatCurrency(value), '']} />
-                <Legend />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#f5f5f0',
+                    border: '2px solid #0a0a0a',
+                    borderRadius: 0,
+                    boxShadow: '4px 4px 0 0 #0a0a0a',
+                    color: '#0a0a0a',
+                    fontFamily: 'Geist, sans-serif',
+                  }}
+                  formatter={(value) => [formatCurrency(value), '']}
+                />
+                <Legend wrapperStyle={{ fontFamily: 'Geist, sans-serif', fontSize: 12, fontWeight: 600, color: '#0a0a0a' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </BrutalCard>
       </div>
 
       {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Recent Transactions */}
-        <div className="lg:col-span-2 rounded-xl border border-white/10 bg-white/[0.05] backdrop-blur-xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-white">
+        <BrutalCard className="lg:col-span-2 p-6">
+          <div className="flex items-center justify-between border-b-2 border-brutal-ink pb-3 mb-5">
+            <h3 className="text-base font-extrabold tracking-tight text-brutal-ink uppercase">
               Recent Transactions
             </h3>
             <button
               onClick={() => navigate('/transactions')}
-              className="text-sm text-brand-cyan hover:text-white font-medium flex items-center space-x-1"
+              className="text-[11px] font-bold uppercase tracking-[0.14em] text-brutal-ink underline underline-offset-2 decoration-2 decoration-brutal-accent flex items-center space-x-1"
             >
               <span>View All</span>
-              <EyeIcon className="h-4 w-4" />
+              <Eye size={12} />
             </button>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {dashboardData.recentTransactions.map((transaction) => (
               <div
                 key={transaction.id}
-                className="flex items-center justify-between p-3 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                className="flex items-center justify-between p-3 border-2 border-transparent hover:border-brutal-ink hover:bg-amber-50 cursor-pointer transition-colors"
                 onClick={() => navigate(`/transactions/${transaction.id}`)}
               >
                 <div className="flex items-center space-x-3">
-                  <div className={`p-2 rounded-lg ${
-                    transaction.type === 'income' ? 'bg-emerald-500/15' : 'bg-rose-500/15'
+                  <div className={`p-2 border-2 border-brutal-ink ${
+                    transaction.type === 'income' ? 'bg-emerald-200' : 'bg-rose-200'
                   }`}>
-                    <CreditCardIcon className={`h-4 w-4 ${
-                      transaction.type === 'income' ? 'text-emerald-300' : 'text-rose-300'
-                    }`} />
+                    <CreditCard size={14} className="text-brutal-ink" strokeWidth={2.2} />
                   </div>
                   <div>
-                    <p className="font-medium text-white">
+                    <p className="font-bold text-brutal-ink">
                       {transaction.description}
                     </p>
-                    <p className="text-sm text-white/55 tabular-nums">
-                      {transaction.category} • {format(new Date(transaction.date), 'MMM dd')}
+                    <p className="text-xs text-brutal-ink/60 tabular-nums">
+                      {transaction.category} · {format(new Date(transaction.date), 'MMM dd')}
                     </p>
                   </div>
                 </div>
-                <div className={`font-semibold tabular-nums ${
-                  transaction.amount > 0 ? 'text-emerald-300' : 'text-rose-300'
+                <div className={`font-extrabold tabular-nums ${
+                  transaction.amount > 0 ? 'text-emerald-700' : 'text-rose-700'
                 }`}>
                   {transaction.amount > 0 ? '+' : ''}{formatCurrency(transaction.amount)}
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </BrutalCard>
 
         {/* Budget Progress */}
-        <div className="rounded-xl border border-white/10 bg-white/[0.05] backdrop-blur-xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-white">
+        <BrutalCard className="p-6">
+          <div className="flex items-center justify-between border-b-2 border-brutal-ink pb-3 mb-5">
+            <h3 className="text-base font-extrabold tracking-tight text-brutal-ink uppercase">
               Budget Progress
             </h3>
             <button
               onClick={() => navigate('/budgets')}
-              className="text-sm text-brand-cyan hover:text-white font-medium"
+              className="text-[11px] font-bold uppercase tracking-[0.14em] text-brutal-ink underline underline-offset-2 decoration-2 decoration-brutal-accent"
             >
               Manage
             </button>
@@ -465,47 +428,46 @@ const Dashboard = () => {
           <div className="space-y-4">
             {dashboardData.budgetProgress.map((budget) => (
               <div key={budget.id || budget.name}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-white">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-bold text-brutal-ink">
                     {budget.name}
                   </span>
-                  <span className="text-sm text-white/55 tabular-nums">
+                  <span className="text-xs text-brutal-ink/70 tabular-nums">
                     {formatCurrency(budget.spent)} / {formatCurrency(budget.budgeted)}
                   </span>
                 </div>
-                <div className="w-full bg-white/10 rounded-full h-2">
+                <div className="w-full bg-brutal-paper border-2 border-brutal-ink h-3">
                   <div
-                    className={`h-2 rounded-full transition-all duration-300 ${
+                    className={`h-full transition-all duration-300 ${
                       budget.percentage > 90
                         ? 'bg-rose-500'
                         : budget.percentage > 75
-                        ? 'bg-amber-400'
-                        : 'bg-emerald-400'
+                        ? 'bg-amber-500'
+                        : 'bg-emerald-500'
                     }`}
                     style={{ width: `${Math.min(budget.percentage, 100)}%` }}
                   />
                 </div>
                 <div className="flex justify-between items-center mt-1">
-                  <span className={`text-xs font-medium tabular-nums ${
+                  <span className={`text-[11px] font-bold tabular-nums uppercase tracking-wide ${
                     budget.percentage > 90
-                      ? 'text-rose-300'
+                      ? 'text-rose-700'
                       : budget.percentage > 75
-                      ? 'text-amber-300'
-                      : 'text-emerald-300'
+                      ? 'text-amber-700'
+                      : 'text-emerald-700'
                   }`}>
                     {Number(budget.percentage || 0).toFixed(0)}% used
                   </span>
-                  <span className="text-xs text-white/55 tabular-nums">
+                  <span className="text-[11px] text-brutal-ink/60 tabular-nums">
                     {formatCurrency(budget.budgeted - budget.spent)} left
                   </span>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </BrutalCard>
       </div>
     </div>
-    </AuroraScreen>
   );
 };
 

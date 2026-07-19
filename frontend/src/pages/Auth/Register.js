@@ -5,17 +5,9 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { clsx } from 'clsx';
-import AuroraScreen from '../../components/layout/AuroraScreen';
-import AuroraCard from '../../components/ui/AuroraCard';
-import {
-  EyeIcon,
-  EyeSlashIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  UserIcon,
-  EnvelopeIcon,
-  LockClosedIcon,
-} from '@heroicons/react/24/outline';
+import { Eye, EyeOff, Check, X } from 'lucide-react';
+import BrutalistScreen from '../../components/layout/BrutalistScreen';
+import BrutalCard from '../../components/ui/BrutalCard';
 import { register as registerUser, requestOtp, verifyOtp } from '../../store/slices/authSlice';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 
@@ -75,7 +67,6 @@ const Register = () => {
 
   const watchPassword = watch('password', '');
 
-  // Calculate password strength
   useEffect(() => {
     const calculateStrength = (password) => {
       let strength = 0;
@@ -86,7 +77,6 @@ const Register = () => {
       if (/[@$!%*?&]/.test(password)) strength += 1;
       return strength;
     };
-
     setPasswordStrength(calculateStrength(watchPassword));
   }, [watchPassword]);
 
@@ -98,7 +88,6 @@ const Register = () => {
         email: data.email,
         password: data.password,
       })).unwrap();
-
       setEmailValue(data.email);
       setStep('otp');
       setResendCooldown(60);
@@ -111,9 +100,7 @@ const Register = () => {
     try {
       await dispatch(verifyOtp({ email: emailValue, purpose: 'register', code: otpCode })).unwrap();
       navigate('/onboarding/investment-profile');
-    } catch (e) {
-      // slice handles toast
-    }
+    } catch (e) {}
   };
 
   const handleResendOtp = async () => {
@@ -121,9 +108,7 @@ const Register = () => {
     try {
       await dispatch(requestOtp({ email: emailValue, purpose: 'register' })).unwrap();
       setResendCooldown(60);
-    } catch (e) {
-      // slice handles toast
-    }
+    } catch (e) {}
   };
 
   useEffect(() => {
@@ -135,10 +120,10 @@ const Register = () => {
   }, [resendCooldown]);
 
   const getPasswordStrengthColor = () => {
-    if (passwordStrength <= 2) return 'bg-danger-500';
-    if (passwordStrength <= 3) return 'bg-warning-500';
-    if (passwordStrength <= 4) return 'bg-primary-500';
-    return 'bg-success-500';
+    if (passwordStrength <= 2) return 'bg-rose-500';
+    if (passwordStrength <= 3) return 'bg-amber-500';
+    if (passwordStrength <= 4) return 'bg-cyan-600';
+    return 'bg-emerald-600';
   };
 
   const getPasswordStrengthText = () => {
@@ -156,40 +141,34 @@ const Register = () => {
     { text: 'One special character', met: /[@$!%*?&]/.test(watchPassword) },
   ];
 
+  const brutalBtn =
+    'w-full inline-flex items-center justify-center gap-2 bg-brutal-ink text-brutal-paper border-2 border-brutal-ink px-4 py-3.5 text-sm font-bold uppercase tracking-[0.14em] shadow-[4px_4px_0_0_#0a0a0a] hover:shadow-[2px_2px_0_0_#0a0a0a] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px] transition-all disabled:opacity-50 disabled:cursor-not-allowed';
+  const brutalInput =
+    'block w-full border-2 border-brutal-ink bg-brutal-paper px-3 py-2.5 text-sm font-medium text-brutal-ink placeholder:text-brutal-ink/40 focus:outline-none focus:bg-amber-50';
+  const brutalLabel =
+    'block text-[11px] font-bold uppercase tracking-[0.14em] text-brutal-ink mb-1.5';
+
   return (
-    <AuroraScreen>
-      <div className="aurora-shell min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <BrutalistScreen>
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
-          {/* Header */}
-          <div className="text-center">
-            <div className="mx-auto h-14 w-14 rounded-2xl bg-gradient-to-br from-brand-indigo via-brand-cyan to-brand-pink flex items-center justify-center shadow-[0_18px_60px_-12px_rgba(99,102,241,0.6)]">
-              <svg
-                className="h-7 w-7 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-                />
-              </svg>
+          <div className="text-left">
+            <div className="inline-flex items-center gap-2 bg-brutal-ink text-brutal-paper px-3 py-1.5 mb-4">
+              <span className="h-2 w-2 bg-brutal-accent" />
+              <span className="text-[11px] font-bold uppercase tracking-[0.18em]">PFIMS · New account</span>
             </div>
-            <h2 className="mt-6 text-3xl font-bold bg-gradient-to-r from-white via-brand-indigo to-white bg-clip-text text-transparent">
-              {step === 'otp' ? 'Verify your email' : 'Create your account'}
-            </h2>
-            <p className="mt-2 text-sm text-white/70">
+            <h1 className="font-display text-5xl font-extrabold leading-[0.95] tracking-tight text-brutal-ink">
+              {step === 'otp' ? <>Verify<span className="text-brutal-accent">.</span></> : <>Sign up<span className="text-brutal-accent">.</span></>}
+            </h1>
+            <p className="mt-3 text-sm text-brutal-ink/70">
               {step === 'otp'
                 ? `Enter the OTP sent to ${emailValue || 'your email'}`
-                : 'Join PFIMS to take control of your finances'}
+                : 'No credit card. Email-verified.'}
             </p>
           </div>
 
-          {/* Card */}
           <form
-            className="mt-8 space-y-6"
+            className="space-y-5"
             onSubmit={(e) => {
               e.preventDefault();
               if (step === 'form') {
@@ -199,303 +178,147 @@ const Register = () => {
               }
             }}
           >
-            <div className="relative rounded-3xl border border-white/10 bg-black/40 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_20px_80px_-20px_rgba(0,0,0,0.7)] p-8">
-              {/* Error message */}
-              {error && (
-                <div className="mb-4 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                  <div className="flex">
-                    <XCircleIcon className="h-5 w-5 text-rose-300" />
-                    <p className="ml-3">{error}</p>
-                  </div>
-                </div>
-              )}
+            {error && (
+              <div className="border-2 border-brutal-ink bg-rose-100 px-4 py-3">
+                <p className="text-sm font-semibold text-brutal-ink">{error}</p>
+              </div>
+            )}
 
+            <BrutalCard className="p-6 sm:p-7 space-y-4">
               {step === 'form' ? (
-                <div className="space-y-4">
-                  {/* Name fields */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label htmlFor="firstName" className="form-label">
-                        First name
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <UserIcon className="h-5 w-5 text-white/40" />
-                        </div>
-                        <input
-                          {...register('firstName')}
-                          type="text"
-                          autoComplete="given-name"
-                          className={clsx('input pl-10 pr-3', errors.firstName && 'input-error')}
-                          placeholder="First name"
-                        />
-                      </div>
-                      {errors.firstName && (
-                        <p className="form-error">{errors.firstName.message}</p>
-                      )}
+                      <label htmlFor="firstName" className={brutalLabel}>First</label>
+                      <input id="firstName" {...register('firstName')} type="text" autoComplete="given-name" className={brutalInput} placeholder="Pi" />
+                      {errors.firstName && <p className="mt-1 text-xs font-semibold text-brutal-accent">{errors.firstName.message}</p>}
                     </div>
-
                     <div>
-                      <label htmlFor="lastName" className="form-label">
-                        Last name
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <UserIcon className="h-5 w-5 text-white/40" />
-                        </div>
-                        <input
-                          {...register('lastName')}
-                          type="text"
-                          autoComplete="family-name"
-                          className={clsx('input pl-10 pr-3', errors.lastName && 'input-error')}
-                          placeholder="Last name"
-                        />
-                      </div>
-                      {errors.lastName && (
-                        <p className="form-error">{errors.lastName.message}</p>
-                      )}
+                      <label htmlFor="lastName" className={brutalLabel}>Last</label>
+                      <input id="lastName" {...register('lastName')} type="text" autoComplete="family-name" className={brutalInput} placeholder="Yush" />
+                      {errors.lastName && <p className="mt-1 text-xs font-semibold text-brutal-accent">{errors.lastName.message}</p>}
                     </div>
                   </div>
 
-                  {/* Email field */}
                   <div>
-                    <label htmlFor="email" className="form-label">
-                      Email address
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <EnvelopeIcon className="h-5 w-5 text-white/40" />
-                      </div>
-                      <input
-                        {...register('email')}
-                        type="email"
-                        autoComplete="email"
-                        className={clsx('input pl-10 pr-3', errors.email && 'input-error')}
-                        placeholder="you@example.com"
-                      />
-                    </div>
-                    {errors.email && (
-                      <p className="form-error">{errors.email.message}</p>
-                    )}
+                    <label htmlFor="email" className={brutalLabel}>Email</label>
+                    <input id="email" {...register('email')} type="email" autoComplete="email" className={brutalInput} placeholder="you@example.com" />
+                    {errors.email && <p className="mt-1 text-xs font-semibold text-brutal-accent">{errors.email.message}</p>}
                   </div>
 
-                  {/* Password field */}
                   <div>
-                    <label htmlFor="password" className="form-label">
-                      Password
-                    </label>
+                    <label htmlFor="password" className={brutalLabel}>Password</label>
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <LockClosedIcon className="h-5 w-5 text-white/40" />
-                      </div>
-                      <input
-                        {...register('password')}
-                        type={showPassword ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        className={clsx('input pl-10 pr-12', errors.password && 'input-error')}
-                        placeholder="At least 8 characters"
-                      />
-                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className={clsx(
-                            'focus:outline-none transition-colors',
-                            showPassword ? 'text-white/85' : 'text-white/50 hover:text-white/85'
-                          )}
-                          aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
-                        </button>
-                      </div>
+                      <input id="password" {...register('password')} type={showPassword ? 'text' : 'password'} autoComplete="new-password" className={clsx(brutalInput, 'pr-10')} placeholder="••••••••" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 flex items-center px-3 text-brutal-ink/60 hover:text-brutal-ink" aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                     </div>
-                    {errors.password && (
-                      <p className="form-error">{errors.password.message}</p>
-                    )}
+                    {errors.password && <p className="mt-1 text-xs font-semibold text-brutal-accent">{errors.password.message}</p>}
 
-                    {/* Password strength indicator */}
                     {watchPassword && (
                       <div className="mt-2">
-                        <div className="flex items-center justify-between mb-1 text-xs text-white/60">
-                          <span>Password strength</span>
-                          <span
-                            className={clsx(
-                              'font-medium',
-                              passwordStrength <= 2 && 'text-rose-300',
-                              passwordStrength === 3 && 'text-amber-300',
-                              passwordStrength === 4 && 'text-cyan-300',
-                              passwordStrength >= 5 && 'text-emerald-300'
-                            )}
-                          >
-                            {getPasswordStrengthText()}
-                          </span>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-brutal-ink/60">Strength</span>
+                          <span className="text-xs font-bold text-brutal-ink">{getPasswordStrengthText()}</span>
                         </div>
-                        <div className="w-full h-1 rounded-full bg-white/10 overflow-hidden">
-                          <div
-                            className={clsx(
-                              'h-full rounded-full transition-all duration-300',
-                              passwordStrength <= 2 && 'bg-rose-400',
-                              passwordStrength === 3 && 'bg-amber-400',
-                              passwordStrength === 4 && 'bg-cyan-400',
-                              passwordStrength >= 5 && 'bg-gradient-to-r from-emerald-400 via-cyan-400 to-brand-pink'
-                            )}
-                            style={{ width: `${(passwordStrength / 5) * 100}%` }}
-                          />
+                        <div className="w-full bg-brutal-paper border border-brutal-ink h-1.5">
+                          <div className={clsx('h-full transition-all duration-300', getPasswordStrengthColor())} style={{ width: `${(passwordStrength / 5) * 100}%` }} />
                         </div>
                       </div>
                     )}
 
-                    {/* Password requirements */}
                     {watchPassword && (
-                      <ul className="mt-3 space-y-1">
+                      <div className="mt-3 grid grid-cols-1 gap-1">
                         {passwordRequirements.map((req, index) => (
-                          <li key={index} className="flex items-center text-xs">
+                          <div key={index} className="flex items-center text-xs">
                             {req.met ? (
-                              <CheckCircleIcon className="h-3 w-3 text-emerald-300 mr-2" />
+                              <Check size={14} className="text-emerald-700 mr-2" strokeWidth={3} />
                             ) : (
-                              <XCircleIcon className="h-3 w-3 text-white/40 mr-2" />
+                              <X size={14} className="text-brutal-ink/30 mr-2" strokeWidth={3} />
                             )}
-                            <span className={req.met ? 'text-emerald-200' : 'text-white/55'}>
+                            <span className={req.met ? 'text-brutal-ink font-semibold' : 'text-brutal-ink/50'}>
                               {req.text}
                             </span>
-                          </li>
+                          </div>
                         ))}
-                      </ul>
+                      </div>
                     )}
                   </div>
 
-                  {/* Confirm password field */}
                   <div>
-                    <label htmlFor="confirmPassword" className="form-label">
-                      Confirm password
-                    </label>
+                    <label htmlFor="confirmPassword" className={brutalLabel}>Confirm password</label>
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <LockClosedIcon className="h-5 w-5 text-white/40" />
-                      </div>
-                      <input
-                        {...register('confirmPassword')}
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        className={clsx('input pl-10 pr-12', errors.confirmPassword && 'input-error')}
-                        placeholder="Repeat your password"
-                      />
-                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className={clsx(
-                            'focus:outline-none transition-colors',
-                            showConfirmPassword ? 'text-white/85' : 'text-white/50 hover:text-white/85'
-                          )}
-                          aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showConfirmPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
-                        </button>
-                      </div>
+                      <input id="confirmPassword" {...register('confirmPassword')} type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" className={clsx(brutalInput, 'pr-10')} placeholder="••••••••" />
+                      <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute inset-y-0 right-0 flex items-center px-3 text-brutal-ink/60 hover:text-brutal-ink" aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}>
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                     </div>
-                    {errors.confirmPassword && (
-                      <p className="form-error">{errors.confirmPassword.message}</p>
-                    )}
+                    {errors.confirmPassword && <p className="mt-1 text-xs font-semibold text-brutal-accent">{errors.confirmPassword.message}</p>}
                   </div>
 
-                  {/* Terms and conditions */}
-                  <div className="flex items-start pt-2">
-                    <div className="relative flex items-center h-5">
-                      <input
-                        {...register('acceptTerms')}
-                        id="acceptTerms"
-                        type="checkbox"
-                        className="sr-only peer"
-                      />
-                      <label
-                        htmlFor="acceptTerms"
-                        className="h-5 w-5 rounded border border-white/30 bg-white/5 peer-checked:bg-gradient-to-br peer-checked:from-brand-indigo peer-checked:to-brand-pink peer-checked:border-transparent peer-focus-visible:ring-2 peer-focus-visible:ring-brand-indigo cursor-pointer transition-colors"
-                      />
-                    </div>
-                    <label htmlFor="acceptTerms" className="ml-3 text-sm text-white/70 leading-5">
+                  <div className="flex items-start gap-2.5 pt-1">
+                    <span className="relative inline-block mt-0.5">
+                      <input id="acceptTerms" {...register('acceptTerms')} type="checkbox" className="peer absolute opacity-0 w-5 h-5" />
+                      <span className="block w-5 h-5 border-2 border-brutal-ink peer-checked:bg-brutal-ink transition-colors" />
+                    </span>
+                    <label htmlFor="acceptTerms" className="text-sm text-brutal-ink/80 leading-snug">
                       I agree to the{' '}
-                      <Link to="/terms" className="text-brand-cyan hover:text-white font-medium underline-offset-2 hover:underline">
-                        Terms and Conditions
-                      </Link>{' '}
+                      <Link to="/terms" className="font-bold underline underline-offset-2 decoration-2 decoration-brutal-accent">Terms</Link>{' '}
                       and{' '}
-                      <Link to="/privacy" className="text-brand-cyan hover:text-white font-medium underline-offset-2 hover:underline">
-                        Privacy Policy
-                      </Link>
+                      <Link to="/privacy" className="font-bold underline underline-offset-2 decoration-2 decoration-brutal-accent">Privacy</Link>.
                     </label>
                   </div>
-                  {errors.acceptTerms && (
-                    <p className="form-error -mt-2">{errors.acceptTerms.message}</p>
-                  )}
-                </div>
+                  {errors.acceptTerms && <p className="text-xs font-semibold text-brutal-accent">{errors.acceptTerms.message}</p>}
+                </>
               ) : (
-                <div className="space-y-4">
+                <>
+                  <div className="border-l-4 border-brutal-ink pl-3">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-brutal-ink/70">Code sent to</p>
+                    <p className="text-sm font-bold text-brutal-ink break-all">{emailValue || 'your inbox'}</p>
+                  </div>
                   <div>
-                    <label htmlFor="otp" className="form-label">
-                      Enter the 6-digit code
-                    </label>
-                    <input
-                      id="otp"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      className="input tracking-[0.4em] text-center text-lg font-semibold"
-                      placeholder="·  ·  ·  ·  ·  ·"
-                    />
-                    <p className="mt-2 text-xs text-white/55">
-                      Sent to <span className="text-white/80">{emailValue}</span>. Codes expire in 10 minutes.
-                    </p>
+                    <label htmlFor="otp" className={brutalLabel}>6-digit code</label>
+                    <input id="otp" type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))} className="block w-full border-2 border-brutal-ink bg-brutal-paper px-3 py-4 text-center text-3xl font-bold tracking-[0.4em] text-brutal-ink placeholder:text-brutal-ink/30 focus:outline-none focus:bg-amber-50" placeholder="000000" />
                   </div>
 
-                  <div className="flex items-center justify-between text-sm">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStep('form');
-                        setOtpCode('');
-                      }}
-                      className="text-white/70 hover:text-white transition-colors"
-                    >
+                  <div className="flex items-center justify-between pt-1 text-xs">
+                    <button type="button" onClick={() => { setStep('form'); setOtpCode(''); }} className="font-bold uppercase tracking-wide text-brutal-ink/70 hover:text-brutal-ink underline underline-offset-2">
                       ← Edit details
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleResendOtp}
-                      disabled={resendCooldown > 0}
-                      className="font-medium text-brand-cyan hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
+                    <button type="button" onClick={handleResendOtp} disabled={resendCooldown > 0} className="font-bold uppercase tracking-wide text-brutal-ink underline underline-offset-2 decoration-2 decoration-brutal-accent disabled:opacity-50 disabled:no-underline">
                       {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
                     </button>
                   </div>
-                </div>
+                </>
               )}
+            </BrutalCard>
 
-              {/* Submit button */}
-              <button
-                type="submit"
-                disabled={step === 'form' ? isLoading || !isValid : isLoading || otpCode.length !== 6}
-                className="btn-primary mt-7 w-full"
-              >
-                {isLoading ? <LoadingSpinner size="sm" /> : step === 'form' ? 'Create Account' : 'Verify & Continue'}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={step === 'form' ? isLoading || !isValid : isLoading || otpCode.length < 4}
+              className={brutalBtn}
+            >
+              {isLoading ? (
+                <>
+                  <LoadingSpinner size="sm" />
+                  <span className="ml-2">{step === 'form' ? 'Creating…' : 'Verifying…'}</span>
+                </>
+              ) : (
+                <>{step === 'form' ? 'Create account' : 'Verify OTP'} →</>
+              )}
+            </button>
 
-            {/* Sign in link */}
-            <div className="text-center">
-              <p className="text-sm text-white/70">
-                Already have an account?{' '}
-                <Link to="/login" className="font-medium text-brand-cyan hover:text-white transition-colors">
-                  Sign in
-                </Link>
-              </p>
+            <div className="text-center text-sm text-brutal-ink/80">
+              Have an account?{' '}
+              <Link to="/login" className="font-bold underline underline-offset-2 decoration-2 decoration-brutal-accent hover:text-brutal-ink">
+                Sign in
+              </Link>
             </div>
           </form>
         </div>
       </div>
-    </AuroraScreen>
+    </BrutalistScreen>
   );
 };
 

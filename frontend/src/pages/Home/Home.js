@@ -11,96 +11,56 @@ import {
   Receipt,
   Lock,
 } from 'lucide-react';
-import AuroraScreen from '../../components/layout/AuroraScreen';
-import AuroraCard from '../../components/ui/AuroraCard';
 import { useSelector } from 'react-redux';
 import { Navigate } from 'react-router-dom';
+import BrutalistScreen from '../../components/layout/BrutalistScreen';
+import BrutalCard from '../../components/ui/BrutalCard';
 
 const features = [
-  {
-    icon: Receipt,
-    accent: 'indigo',
-    title: 'One ledger for everything',
-    body: 'Bank statements, UPI, credit cards, mutual funds — imported, parsed and tagged in seconds.',
-  },
-  {
-    icon: LineChart,
-    accent: 'cyan',
-    title: 'Stock signals without the noise',
-    body: 'RSI, MACD, SMA and volume flags distilled into one daily summary. Track 200+ tickers out of the box.',
-  },
-  {
-    icon: Bot,
-    accent: 'pink',
-    title: 'An AI that knows your money',
-    body: 'Ask in plain English. "What did I spend on dining in May?" The assistant pulls the real numbers.',
-  },
-  {
-    icon: Wallet,
-    accent: 'indigo',
-    title: 'Budgets that flex with you',
-    body: 'Rollover-friendly envelopes and per-category pacing so you stop guessing where the month went.',
-  },
-  {
-    icon: TrendingUp,
-    accent: 'cyan',
-    title: 'Portfolio, finally readable',
-    body: 'Holdings across brokers in one view. Allocation drift, realised gains and dividend calendar.',
-  },
-  {
-    icon: Layers,
-    accent: 'pink',
-    title: 'Reports that mail themselves',
-    body: 'Weekly and monthly summaries delivered on schedule — no spreadsheet, no login, no friction.',
-  },
+  { icon: Receipt, title: 'One ledger for everything', body: 'Bank statements, UPI, credit cards, mutual funds — imported, parsed and tagged in seconds.' },
+  { icon: LineChart, title: 'Stock signals without the noise', body: 'RSI, MACD, SMA and volume flags distilled into one daily summary. Track 200+ tickers out of the box.' },
+  { icon: Bot, title: 'An AI that knows your money', body: 'Ask in plain English. "What did I spend on dining in May?" The assistant pulls the real numbers.' },
+  { icon: Wallet, title: 'Budgets that flex with you', body: 'Rollover-friendly envelopes and per-category pacing so you stop guessing where the month went.' },
+  { icon: TrendingUp, title: 'Portfolio, finally readable', body: 'Holdings across brokers in one view. Allocation drift, realised gains and dividend calendar.' },
+  { icon: Layers, title: 'Reports that mail themselves', body: 'Weekly and monthly summaries delivered on schedule — no spreadsheet, no login, no friction.' },
 ];
 
 const stats = [
-  { k: 'Encrypted at rest', v: 'AES-256', accent: 'from-emerald-300/80 to-cyan-300/80' },
-  { k: 'MFA on by default', v: 'TOTP', accent: 'from-cyan-300/80 to-indigo-300/80' },
-  { k: 'AI provider', v: 'You choose', accent: 'from-indigo-300/80 to-pink-300/80' },
+  { k: 'Encrypted at rest', v: 'AES-256' },
+  { k: 'MFA on by default', v: 'TOTP' },
+  { k: 'AI provider', v: 'You choose' },
 ];
 
 export default function Home() {
-  // If the user is already authenticated, the dashboard is the real "home".
   const { isAuthenticated } = useSelector((state) => state.auth);
   if (isAuthenticated) return <Navigate to="/" replace />;
 
+  const brutalBtn =
+    'inline-flex items-center justify-center gap-2 bg-brutal-ink text-brutal-paper border-2 border-brutal-ink px-5 py-3 text-sm font-bold uppercase tracking-[0.14em] shadow-[6px_6px_0_0_#0a0a0a] hover:shadow-[3px_3px_0_0_#0a0a0a] hover:translate-x-[3px] hover:translate-y-[3px] active:shadow-none active:translate-x-[6px] active:translate-y-[6px] transition-all';
+  const brutalBtnSecondary =
+    'inline-flex items-center justify-center gap-2 bg-brutal-paper text-brutal-ink border-2 border-brutal-ink px-5 py-3 text-sm font-bold uppercase tracking-[0.14em] shadow-[6px_6px_0_0_#0a0a0a] hover:shadow-[3px_3px_0_0_#0a0a0a] hover:translate-x-[3px] hover:translate-y-[3px] active:shadow-none active:translate-x-[6px] active:translate-y-[6px] transition-all';
+
   return (
-    <AuroraScreen>
-      <div className="aurora-shell relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-6 pb-20 pt-10 sm:px-8 lg:px-12">
+    <BrutalistScreen>
+      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-6 pb-20 pt-10 sm:px-8 lg:px-12">
         {/* Top nav */}
         <header className="flex items-center justify-between">
-          <Link to="/home" className="group flex items-center gap-3">
-            <div
-              className="grid h-9 w-9 place-items-center rounded-xl text-white shadow-[0_18px_60px_-12px_rgba(99,102,241,0.6)]"
-              style={{
-                background:
-                  'conic-gradient(from 220deg at 50% 50%, #6366f1 0%, #06b6d4 35%, #ec4899 70%, #6366f1 100%)',
-              }}
-            >
+          <Link to="/home" className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center bg-brutal-ink text-brutal-paper border-2 border-brutal-ink shadow-[4px_4px_0_0_#0a0a0a]">
               <Sparkles size={16} strokeWidth={2.4} />
             </div>
-            <span className="text-base font-semibold tracking-tight text-white">
-              PFIMS
-            </span>
+            <span className="text-base font-extrabold tracking-tight text-brutal-ink">PFIMS</span>
           </Link>
-          <nav className="hidden items-center gap-7 text-sm text-white/70 md:flex">
-            <a href="#features" className="hover:text-white transition-colors">Features</a>
-            <a href="#how" className="hover:text-white transition-colors">How it works</a>
-            <a href="#trust" className="hover:text-white transition-colors">Security</a>
+          <nav className="hidden items-center gap-8 text-xs font-bold uppercase tracking-[0.14em] text-brutal-ink md:flex">
+            <a href="#features" className="hover:text-brutal-accent transition-colors">Features</a>
+            <a href="#how" className="hover:text-brutal-accent transition-colors">How</a>
+            <a href="#trust" className="hover:text-brutal-accent transition-colors">Security</a>
           </nav>
           <div className="flex items-center gap-3">
-            <Link
-              to="/login"
-              className="hidden text-sm font-medium text-white/80 hover:text-white sm:inline-block transition-colors"
-            >
+            <Link to="/login" className="hidden text-xs font-bold uppercase tracking-[0.14em] text-brutal-ink underline underline-offset-4 decoration-2 decoration-brutal-accent hover:text-brutal-ink sm:inline-block">
               Sign in
             </Link>
-            <Link
-              to="/register"
-              className="btn-primary inline-flex items-center gap-1.5 !py-2 !px-4 text-sm"
-            >
+            <Link to="/register" className={brutalBtn + ' !py-2 !px-3 text-xs'}>
               Get started
               <ArrowRight size={14} />
             </Link>
@@ -109,248 +69,186 @@ export default function Home() {
 
         {/* Hero */}
         <section className="mt-20 sm:mt-28">
-          <div className="flex flex-col items-center text-center">
-            <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/80 backdrop-blur">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              v2 — Aurora redesign is live
-            </span>
-            <h1 className="font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
-              <span className="block text-white">Your finances,</span>
-              <span
-                className="block bg-clip-text text-transparent"
-                style={{
-                  backgroundImage:
-                    'linear-gradient(120deg, #ffffff 0%, #a5b4fc 30%, #67e8f9 55%, #f9a8d4 80%, #ffffff 100%)',
-                }}
-              >
-                illuminated.
+          <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 lg:items-end">
+            <div className="lg:col-span-8">
+              <span className="mb-6 inline-flex items-center gap-2 bg-brutal-ink text-brutal-paper px-3 py-1.5">
+                <span className="h-1.5 w-1.5 bg-brutal-accent" />
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em]">v2 · Aurora redesign is live</span>
               </span>
-            </h1>
-            <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/75 sm:text-lg">
-              PFIMS turns a pile of bank statements, broker logins and forgotten
-              UPI transactions into a single calm dashboard — with an AI that
-              answers your money questions like a friend, not a form.
-            </p>
-            <div className="mt-9 flex flex-col items-center gap-3 sm:flex-row">
-              <Link
-                to="/register"
-                className="btn-primary inline-flex items-center gap-2"
-              >
-                Start free
-                <ArrowRight size={16} />
-              </Link>
-              <Link
-                to="/login"
-                className="btn-ghost inline-flex items-center gap-2"
-              >
-                <Lock size={14} className="text-white/60" />
-                I already have an account
-              </Link>
+              <h1 className="font-display text-5xl font-extrabold leading-[0.92] tracking-tight text-brutal-ink sm:text-7xl">
+                Your finances,
+                <br />
+                <span className="inline-block bg-brutal-ink text-brutal-paper px-3 mt-2">
+                  illuminated
+                  <span className="text-brutal-accent">.</span>
+                </span>
+              </h1>
+              <p className="mt-7 max-w-xl text-base leading-relaxed text-brutal-ink/80 sm:text-lg">
+                PFIMS turns a pile of bank statements, broker logins and forgotten
+                UPI transactions into a single calm dashboard — with an AI that
+                answers your money questions like a friend, not a form.
+              </p>
+              <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row">
+                <Link to="/register" className={brutalBtn}>
+                  Start free
+                  <ArrowRight size={16} />
+                </Link>
+                <Link to="/login" className={brutalBtnSecondary}>
+                  <Lock size={14} className="text-brutal-ink/60" />
+                  I have an account
+                </Link>
+              </div>
+              <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-brutal-ink/50">
+                No credit card · Email-verified · Export any time
+              </p>
             </div>
-            <p className="mt-3 text-xs text-white/45">
-              No credit card. Email-verified. Export any time.
-            </p>
-          </div>
-        </section>
 
-        {/* "Dashboard preview" mock — a single floating AuroraCard. */}
-        <section className="relative mt-20">
-          <AuroraCard accent="indigo" className="mx-auto max-w-4xl p-6 sm:p-8">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {[
-                { label: 'Net cash flow', value: '+₹48,210', delta: '+12.4%', tone: 'emerald' },
-                { label: 'Savings rate', value: '32.8%', delta: '+3.1pp', tone: 'cyan' },
-                { label: 'Invested', value: '₹6,40,500', delta: '+1.8%', tone: 'pink' },
-              ].map((s) => (
-                <div
-                  key={s.label}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] p-4"
-                >
-                  <p className="text-xs uppercase tracking-wider text-white/50">
-                    {s.label}
-                  </p>
-                  <p className="num mt-2 text-2xl font-semibold text-white">
-                    {s.value}
-                  </p>
-                  <p
-                    className={`mt-1 text-xs font-medium ${
-                      s.tone === 'emerald'
-                        ? 'text-emerald-300'
-                        : s.tone === 'cyan'
-                        ? 'text-cyan-300'
-                        : 'text-pink-300'
-                    }`}
-                  >
-                    {s.delta} vs last month
-                  </p>
+            {/* Sidecard with stats */}
+            <div className="lg:col-span-4">
+              <BrutalCard className="p-6">
+                <div className="flex items-center justify-between border-b-2 border-brutal-ink pb-3 mb-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brutal-ink/70">This month</p>
+                  <span className="h-2 w-2 bg-emerald-700" />
                 </div>
-              ))}
+                {[
+                  { l: 'Net cash flow', v: '+₹48,210', d: '+12.4%' },
+                  { l: 'Savings rate', v: '32.8%', d: '+3.1pp' },
+                  { l: 'Invested', v: '₹6,40,500', d: '+1.8%' },
+                ].map((s) => (
+                  <div key={s.l} className="py-3 border-b border-brutal-ink/15 last:border-b-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-brutal-ink/60">{s.l}</p>
+                    <div className="flex items-baseline justify-between mt-1">
+                      <span className="num text-2xl font-extrabold text-brutal-ink">{s.v}</span>
+                      <span className="text-[11px] font-bold text-emerald-700">{s.d}</span>
+                    </div>
+                  </div>
+                ))}
+              </BrutalCard>
             </div>
-            <div className="mt-5 grid grid-cols-7 items-end gap-2 sm:gap-3">
-              {[42, 56, 38, 70, 84, 60, 92].map((h, i) => (
-                <div
-                  key={i}
-                  className="rounded-md"
-                  style={{
-                    height: `${h}px`,
-                    background:
-                      'linear-gradient(180deg, rgba(99,102,241,0.85) 0%, rgba(6,182,212,0.55) 50%, rgba(236,72,153,0.35) 100%)',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25)',
-                  }}
-                />
-              ))}
-            </div>
-            <p className="num mt-4 text-center text-xs text-white/40 tracking-wider">
-              LAST 7 DAYS · CASH FLOW
-            </p>
-          </AuroraCard>
+          </div>
         </section>
 
         {/* Features */}
         <section id="features" className="mt-32">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Built for the way money actually moves.
-            </h2>
-            <p className="mt-3 text-white/65">
+          <div className="flex items-end justify-between border-b-4 border-brutal-ink pb-4 mb-10">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-brutal-ink/60">01 / Features</p>
+              <h2 className="mt-2 text-4xl font-extrabold tracking-tight text-brutal-ink sm:text-5xl">
+                Built for the way<br />money actually moves.
+              </h2>
+            </div>
+            <p className="hidden max-w-xs text-sm text-brutal-ink/70 md:block">
               Six things that used to live in five different apps — now they
               live in one quiet tab.
             </p>
           </div>
-          <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {features.map((f) => {
               const Icon = f.icon;
               return (
-                <AuroraCard
-                  key={f.title}
-                  accent={f.accent}
-                  className="p-6 transition-transform hover:-translate-y-0.5"
-                >
-                  <div
-                    className="mb-4 grid h-10 w-10 place-items-center rounded-lg text-white"
-                    style={{
-                      background:
-                        f.accent === 'indigo'
-                          ? 'linear-gradient(135deg, rgba(99,102,241,0.85), rgba(6,182,212,0.55))'
-                          : f.accent === 'cyan'
-                          ? 'linear-gradient(135deg, rgba(6,182,212,0.85), rgba(99,102,241,0.55))'
-                          : 'linear-gradient(135deg, rgba(236,72,153,0.85), rgba(99,102,241,0.55))',
-                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25)',
-                    }}
-                  >
+                <BrutalCard key={f.title} hoverable className="p-6">
+                  <div className="mb-4 grid h-11 w-11 place-items-center bg-brutal-ink text-brutal-paper border-2 border-brutal-ink">
                     <Icon size={18} strokeWidth={2.2} />
                   </div>
-                  <h3 className="text-base font-semibold text-white">{f.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-white/65">{f.body}</p>
-                </AuroraCard>
+                  <h3 className="text-base font-extrabold text-brutal-ink">{f.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-brutal-ink/70">{f.body}</p>
+                </BrutalCard>
               );
             })}
           </div>
         </section>
 
-        {/* How it works */}
+        {/* How */}
         <section id="how" className="mt-32">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              From statement to insight in 3 steps.
-            </h2>
+          <div className="flex items-end justify-between border-b-4 border-brutal-ink pb-4 mb-10">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-brutal-ink/60">02 / How it works</p>
+              <h2 className="mt-2 text-4xl font-extrabold tracking-tight text-brutal-ink sm:text-5xl">
+                Statement → insight<br />in 3 steps.
+              </h2>
+            </div>
           </div>
-          <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {[
               { n: '01', t: 'Drop your statement', d: 'Upload a PDF or XLSX — even password-protected ones. We auto-detect the bank.' },
               { n: '02', t: 'AI does the tagging', d: 'Categories, merchants, recurring bills — populated in seconds, fully editable.' },
               { n: '03', t: 'Get your answers', d: 'Ask the assistant. Or read the weekly digest it emails you every Monday.' },
             ].map((s) => (
-              <AuroraCard key={s.n} accent="indigo" className="p-6">
-                <p
-                  className="num text-3xl font-bold tracking-tighter"
-                  style={{
-                    backgroundImage:
-                      'linear-gradient(120deg, #a5b4fc 0%, #67e8f9 50%, #f9a8d4 100%)',
-                    WebkitBackgroundClip: 'text',
-                    backgroundClip: 'text',
-                    color: 'transparent',
-                  }}
-                >
-                  {s.n}
-                </p>
-                <h3 className="mt-3 text-base font-semibold text-white">{s.t}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-white/65">{s.d}</p>
-              </AuroraCard>
+              <BrutalCard key={s.n} className="p-6">
+                <p className="num text-5xl font-extrabold tracking-tighter text-brutal-ink">{s.n}</p>
+                <h3 className="mt-3 text-base font-extrabold text-brutal-ink">{s.t}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-brutal-ink/70">{s.d}</p>
+              </BrutalCard>
             ))}
           </div>
         </section>
 
-        {/* Trust strip */}
+        {/* Trust */}
         <section id="trust" className="mt-32">
-          <AuroraCard accent="cyan" className="px-6 py-8 sm:px-10 sm:py-10">
-            <div className="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
-              <div className="max-w-md">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/80">
-                  <ShieldCheck size={14} className="text-cyan-300" />
-                  Privacy by design
+          <div className="flex items-end justify-between border-b-4 border-brutal-ink pb-4 mb-10">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-brutal-ink/60">03 / Security</p>
+              <h2 className="mt-2 text-4xl font-extrabold tracking-tight text-brutal-ink sm:text-5xl">
+                Your data stays<br />yours.
+              </h2>
+            </div>
+          </div>
+          <BrutalCard className="p-6 sm:p-8">
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 md:items-center">
+              <div>
+                <div className="mb-3 inline-flex items-center gap-2 bg-brutal-ink text-brutal-paper px-3 py-1.5">
+                  <ShieldCheck size={14} className="text-brutal-accent" />
+                  <span className="text-[11px] font-bold uppercase tracking-[0.18em]">Privacy by design</span>
                 </div>
-                <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-                  Your data stays yours.
-                </h2>
-                <p className="mt-2 text-sm leading-relaxed text-white/65">
-                  No ad partners. No data resale. Browser-side parsing where
-                  it makes sense. Encryption at rest, MFA on by default.
+                <p className="text-base leading-relaxed text-brutal-ink/80">
+                  No ad partners. No data resale. Browser-side parsing where it makes sense. Encryption at rest, MFA on by default.
                 </p>
               </div>
-              <div className="grid grid-cols-3 gap-3 sm:gap-5">
+              <div className="grid grid-cols-3 gap-3">
                 {stats.map((s) => (
-                  <div
-                    key={s.k}
-                    className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center"
-                  >
-                    <p
-                      className={`num bg-gradient-to-r bg-clip-text text-xl font-bold tracking-tighter text-transparent ${s.accent}`}
-                    >
-                      {s.v}
-                    </p>
-                    <p className="mt-0.5 text-[11px] uppercase tracking-wider text-white/55">
-                      {s.k}
-                    </p>
+                  <div key={s.k} className="border-2 border-brutal-ink bg-brutal-paper px-3 py-4 text-center">
+                    <p className="num text-xl font-extrabold text-brutal-ink tracking-tighter">{s.v}</p>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-brutal-ink/60">{s.k}</p>
                   </div>
                 ))}
               </div>
             </div>
-          </AuroraCard>
+          </BrutalCard>
         </section>
 
         {/* Final CTA */}
-        <section className="mt-24 text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Ready to look at your money clearly?
-          </h2>
-          <p className="mx-auto mt-3 max-w-md text-white/65">
-            Free, fast, and the assistant is surprisingly good.
-          </p>
-          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link to="/register" className="btn-primary inline-flex items-center gap-2">
-              Create your account
-              <ArrowRight size={16} />
-            </Link>
-            <Link to="/login" className="btn-ghost inline-flex items-center gap-2">
-              Sign in
-            </Link>
-          </div>
+        <section className="mt-24">
+          <BrutalCard className="p-10 sm:p-14 text-center">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-brutal-ink/60">04 / Start</p>
+            <h2 className="mt-3 text-4xl font-extrabold tracking-tight text-brutal-ink sm:text-5xl">
+              Ready to look at your<br />money clearly?
+            </h2>
+            <p className="mx-auto mt-4 max-w-md text-brutal-ink/70">
+              Free, fast, and the assistant is surprisingly good.
+            </p>
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Link to="/register" className={brutalBtn}>
+                Create your account
+                <ArrowRight size={16} />
+              </Link>
+              <Link to="/login" className={brutalBtnSecondary}>
+                Sign in
+              </Link>
+            </div>
+          </BrutalCard>
         </section>
 
-        {/* Footer */}
         <footer className="mt-auto pt-20">
-          <div className="flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-6 text-xs text-white/45 sm:flex-row">
+          <div className="flex flex-col items-center justify-between gap-3 border-t-2 border-brutal-ink pt-6 text-[11px] font-bold uppercase tracking-[0.18em] text-brutal-ink/60 sm:flex-row">
             <p>© {new Date().getFullYear()} PFIMS · Personal Finance Management</p>
             <div className="flex items-center gap-5">
-              <Link to="/login" className="hover:text-white transition-colors">Sign in</Link>
-              <Link to="/register" className="hover:text-white transition-colors">Sign up</Link>
-              <span className="hidden sm:inline">·</span>
-              <span className="hidden sm:inline">Made with aurora</span>
+              <Link to="/login" className="hover:text-brutal-ink underline underline-offset-2">Sign in</Link>
+              <Link to="/register" className="hover:text-brutal-ink underline underline-offset-2">Sign up</Link>
+              <span className="hidden sm:inline">/ Made with concrete</span>
             </div>
           </div>
         </footer>
       </div>
-    </AuroraScreen>
+    </BrutalistScreen>
   );
 }

@@ -11,14 +11,36 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { verifyEmail, resendVerificationEmail } from '../../store/slices/authSlice';
-import AuroraScreen from '../../components/layout/AuroraScreen';
-import AuroraCard from '../../components/ui/AuroraCard';
+import BrutalistScreen from '../../components/layout/BrutalistScreen';
+import BrutalCard from '../../components/ui/BrutalCard';
+
+const brutalBtn =
+  'w-full inline-flex items-center justify-center gap-2 bg-brutal-ink text-brutal-paper border-2 border-brutal-ink px-4 py-3.5 text-sm font-bold uppercase tracking-[0.14em] shadow-[4px_4px_0_0_#0a0a0a] hover:shadow-[2px_2px_0_0_#0a0a0a] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px] transition-all disabled:opacity-50 disabled:cursor-not-allowed';
+const brutalBtnSecondary =
+  'w-full inline-flex items-center justify-center gap-2 bg-brutal-paper text-brutal-ink border-2 border-brutal-ink px-4 py-3.5 text-sm font-bold uppercase tracking-[0.14em] shadow-[4px_4px_0_0_#0a0a0a] hover:shadow-[2px_2px_0_0_#0a0a0a] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px] transition-all';
+const brutalInput =
+  'block w-full border-2 border-brutal-ink bg-brutal-paper px-3 py-2.5 text-sm font-medium text-brutal-ink placeholder:text-brutal-ink/40 focus:outline-none focus:bg-amber-50';
+const brutalLabel =
+  'block text-[11px] font-bold uppercase tracking-[0.14em] text-brutal-ink mb-1.5';
+
+const Badge = ({ tone = 'ink', children }) => {
+  const map = {
+    ink: 'bg-brutal-ink text-brutal-paper',
+    emerald: 'bg-emerald-200 text-emerald-900',
+    rose: 'bg-rose-200 text-rose-900',
+  };
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] border-2 border-brutal-ink ${map[tone]}`}>
+      {children}
+    </span>
+  );
+};
 
 const VerifyEmail = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { loading, user } = useSelector((state) => state.auth);
+  const { isLoading, user } = useSelector((state) => state.auth);
   const [verificationStatus, setVerificationStatus] = useState('verifying');
   const [resendLoading, setResendLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -39,27 +61,21 @@ const VerifyEmail = () => {
   useEffect(() => {
     let interval;
     if (resendCooldown > 0) {
-      interval = setInterval(() => {
-        setResendCooldown((prev) => prev - 1);
-      }, 1000);
+      interval = setInterval(() => setResendCooldown((p) => p - 1), 1000);
     }
     return () => clearInterval(interval);
   }, [resendCooldown]);
 
   useEffect(() => {
-    if (user?.email && !resendEmail) {
-      setResendEmail(user.email);
-    }
+    if (user?.email && !resendEmail) setResendEmail(user.email);
   }, [user, resendEmail]);
 
   const handleVerification = async () => {
     try {
       await dispatch(verifyEmail(token)).unwrap();
       setVerificationStatus('success');
-      setTimeout(() => {
-        navigate('/');
-      }, 3000);
-    } catch (e) {
+      setTimeout(() => navigate('/'), 3000);
+    } catch (_) {
       setVerificationStatus('error');
     }
   };
@@ -67,179 +83,157 @@ const VerifyEmail = () => {
   const handleResendEmail = async (e) => {
     if (e) e.preventDefault();
     if (resendCooldown > 0) return;
-
     setEmailError('');
     if (!resendEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resendEmail)) {
       setEmailError('Please enter a valid email address');
       return;
     }
-
     setResendLoading(true);
     try {
       await dispatch(resendVerificationEmail(resendEmail)).unwrap();
       setResendCooldown(60);
-    } catch (err) {
-      // slice handles toast
-    } finally {
+    } catch (_) {} finally {
       setResendLoading(false);
     }
   };
 
-  const gradientRing = {
-    verifying: 'from-brand-indigo/40 via-brand-cyan/30 to-transparent',
-    success: 'from-emerald-400/30 via-brand-cyan/30 to-transparent',
-    error: 'from-rose-500/30 via-brand-pink/30 to-transparent',
-  };
-
-  const badge = {
-    verifying: 'bg-brand-indigo/15 text-brand-cyan border-brand-indigo/30',
-    success: 'bg-emerald-400/15 text-emerald-200 border-emerald-400/30',
-    error: 'bg-rose-500/15 text-rose-200 border-rose-400/30',
-  };
-
-  const Badge = ({ children, status }) => (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${badge[status]}`}
-    >
-      {children}
-    </span>
-  );
-
   return (
-    <AuroraScreen>
-      <div className="aurora-shell min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="w-full max-w-md">
+    <BrutalistScreen>
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="w-full max-w-md space-y-6">
           {verificationStatus === 'verifying' && (
-            <AuroraCard accent="indigo" className="p-8 text-center">
-              <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br ${gradientRing.verifying} ring-1 ring-white/10`}>
-                <Loader2 className="h-10 w-10 text-white/80 animate-spin" />
+            <>
+              <div className="text-left">
+                <div className="inline-flex items-center gap-2 bg-brutal-ink text-brutal-paper px-3 py-1.5 mb-4">
+                  <span className="h-2 w-2 bg-brutal-accent" />
+                  <span className="text-[11px] font-bold uppercase tracking-[0.18em]">PFIMS · Verify</span>
+                </div>
+                <h1 className="font-display text-5xl font-extrabold leading-[0.95] tracking-tight text-brutal-ink">
+                  Verifying<span className="text-brutal-accent">.</span>
+                </h1>
               </div>
-              <Badge status="verifying">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-cyan opacity-75" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-cyan" />
-                </span>
-                Verifying
-              </Badge>
-              <h2 className="mt-4 text-2xl font-bold text-white">Verifying your email</h2>
-              <p className="mt-2 text-sm text-white/70">
-                Hang tight — we're checking the link against our records. This only takes a second.
-              </p>
-              <div className="mt-6 h-1 w-full overflow-hidden rounded-full bg-white/10">
-                <div className="h-full w-1/3 animate-pulse rounded-full bg-gradient-to-r from-brand-indigo via-brand-cyan to-brand-pink" />
-              </div>
-            </AuroraCard>
+              <BrutalCard className="p-6 sm:p-7 space-y-5">
+                <div className="flex items-center gap-4">
+                  <Loader2 className="h-10 w-10 text-brutal-ink animate-spin" strokeWidth={2.5} />
+                  <Badge tone="ink">
+                    <span className="h-1.5 w-1.5 bg-brutal-accent animate-pulse" />
+                    In progress
+                  </Badge>
+                </div>
+                <p className="text-base text-brutal-ink leading-relaxed">
+                  Hang tight — we're checking the link against our records. This only takes a second.
+                </p>
+                <div className="h-1 w-full bg-brutal-paper border border-brutal-ink overflow-hidden">
+                  <div className="h-full w-1/3 bg-brutal-ink animate-pulse" />
+                </div>
+              </BrutalCard>
+            </>
           )}
 
           {verificationStatus === 'success' && (
-            <AuroraCard accent="cyan" className="p-8 text-center">
-              <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br ${gradientRing.success} ring-1 ring-emerald-300/30`}>
-                <MailCheck className="h-10 w-10 text-emerald-200" strokeWidth={1.5} />
+            <>
+              <div className="text-left">
+                <div className="inline-flex items-center gap-2 bg-brutal-ink text-brutal-paper px-3 py-1.5 mb-4">
+                  <span className="h-2 w-2 bg-brutal-accent" />
+                  <span className="text-[11px] font-bold uppercase tracking-[0.18em]">PFIMS · Verified</span>
+                </div>
+                <h1 className="font-display text-5xl font-extrabold leading-[0.95] tracking-tight text-brutal-ink">
+                  All set<span className="text-brutal-accent">.</span>
+                </h1>
               </div>
-              <Badge status="success">
-                <ShieldCheck size={12} />
-                Email verified
-              </Badge>
-              <h2 className="mt-4 text-2xl font-bold text-white">You're all set!</h2>
-              <p className="mt-2 text-sm text-white/70">
-                Your email address has been verified. We'll take you to the dashboard in a moment.
-              </p>
-              <ul className="mt-6 space-y-2 text-left text-sm text-white/70">
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  Confirmations & statements will now deliver correctly.
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-brand-cyan" />
-                  Two-factor login via OTP is ready to use.
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-brand-pink" />
-                  Personalised recommendations just unlocked.
-                </li>
-              </ul>
-              <Link to="/" className="btn-primary mt-6 inline-flex w-full items-center justify-center">
-                Go to Dashboard
-              </Link>
-            </AuroraCard>
+              <BrutalCard className="p-6 sm:p-7 space-y-5">
+                <div className="flex items-center gap-4">
+                  <MailCheck className="h-10 w-10 text-brutal-ink" strokeWidth={2.2} />
+                  <Badge tone="emerald">
+                    <ShieldCheck size={12} />
+                    Email verified
+                  </Badge>
+                </div>
+                <p className="text-base text-brutal-ink leading-relaxed">
+                  Your email address has been verified. We'll take you to the dashboard in a moment.
+                </p>
+                <ul className="space-y-2 text-sm text-brutal-ink">
+                  <li className="flex items-center gap-2.5">
+                    <span className="h-2 w-2 bg-emerald-700" />
+                    Confirmations & statements now deliver correctly.
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <span className="h-2 w-2 bg-cyan-700" />
+                    Two-factor login via OTP is ready to use.
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <span className="h-2 w-2 bg-rose-700" />
+                    Personalised recommendations just unlocked.
+                  </li>
+                </ul>
+                <Link to="/" className={brutalBtn}>
+                  Go to dashboard →
+                </Link>
+              </BrutalCard>
+            </>
           )}
 
           {verificationStatus === 'error' && (
-            <AuroraCard accent="pink" className="p-8 text-center">
-              <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br ${gradientRing.error} ring-1 ring-rose-300/30`}>
-                <AlertTriangle className="h-10 w-10 text-rose-200" strokeWidth={1.5} />
+            <>
+              <div className="text-left">
+                <div className="inline-flex items-center gap-2 bg-brutal-ink text-brutal-paper px-3 py-1.5 mb-4">
+                  <span className="h-2 w-2 bg-brutal-accent" />
+                  <span className="text-[11px] font-bold uppercase tracking-[0.18em]">PFIMS · Bad link</span>
+                </div>
+                <h1 className="font-display text-5xl font-extrabold leading-[0.95] tracking-tight text-brutal-ink">
+                  Expired<span className="text-brutal-accent">.</span>
+                </h1>
               </div>
-              <Badge status="error">
-                <AlertTriangle size={12} />
-                Link expired
-              </Badge>
-              <h2 className="mt-4 text-2xl font-bold text-white">Verification failed</h2>
-              <p className="mt-2 text-sm text-white/70">
-                {!token
-                  ? 'This link looks malformed or is missing its token. Request a fresh one below.'
-                  : "The verification link is invalid or has expired. We've all done it — request a new one below."}
-              </p>
+              <BrutalCard className="p-6 sm:p-7 space-y-5">
+                <div className="flex items-center gap-4">
+                  <AlertTriangle className="h-10 w-10 text-brutal-ink" strokeWidth={2.2} />
+                  <Badge tone="rose">
+                    <AlertTriangle size={12} />
+                    Link expired
+                  </Badge>
+                </div>
+                <p className="text-base text-brutal-ink leading-relaxed">
+                  {!token
+                    ? 'This link looks malformed or is missing its token. Request a fresh one below.'
+                    : "The verification link is invalid or has expired. We've all done it — request a new one below."}
+                </p>
 
-              {(!user || !user.isEmailVerified) && (
-                <form onSubmit={handleResendEmail} className="mt-6 space-y-3 text-left">
-                  <div>
-                    <label htmlFor="resend-email" className="form-label">
-                      Email address
-                    </label>
-                    <div className="relative">
-                      <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40">
-                        <Mail size={16} />
-                      </span>
-                      <input
-                        id="resend-email"
-                        type="email"
-                        value={resendEmail}
-                        onChange={(e) => {
-                          setResendEmail(e.target.value);
-                          if (emailError) setEmailError('');
-                        }}
-                        placeholder="you@pfims.app"
-                        className={`input pl-10 ${emailError ? 'input-error' : ''}`}
-                        autoComplete="email"
-                        aria-invalid={Boolean(emailError)}
-                      />
+                {(!user || !user.isEmailVerified) && (
+                  <form onSubmit={handleResendEmail} className="space-y-4">
+                    <div>
+                      <label htmlFor="resend-email" className={brutalLabel}>Email address</label>
+                      <div className="relative">
+                        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-brutal-ink/50">
+                          <Mail size={16} />
+                        </span>
+                        <input id="resend-email" type="email" value={resendEmail} onChange={(e) => { setResendEmail(e.target.value); if (emailError) setEmailError(''); }} placeholder="you@pfims.app" className={brutalInput + ' pl-10'} autoComplete="email" aria-invalid={Boolean(emailError)} />
+                      </div>
+                      {emailError && <p className="mt-1 text-xs font-semibold text-brutal-accent">{emailError}</p>}
                     </div>
-                    {emailError && <p className="form-error">{emailError}</p>}
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={resendLoading || resendCooldown > 0}
-                    className="btn-primary inline-flex w-full items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {resendLoading ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : resendCooldown > 0 ? (
-                      <>
-                        <RefreshCw size={16} />
-                        Resend in {resendCooldown}s
-                      </>
-                    ) : (
-                      <>
-                        <Mail size={16} />
-                        Resend verification email
-                      </>
-                    )}
-                  </button>
-                </form>
-              )}
+                    <button type="submit" disabled={resendLoading || resendCooldown > 0} className={brutalBtn}>
+                      {resendLoading ? (
+                        <><Loader2 size={16} className="animate-spin mr-2" /> Sending…</>
+                      ) : resendCooldown > 0 ? (
+                        <><RefreshCw size={16} className="mr-2" /> Resend in {resendCooldown}s</>
+                      ) : (
+                        <><Mail size={16} className="mr-2" /> Resend verification email</>
+                      )}
+                    </button>
+                  </form>
+                )}
 
-              <Link
-                to="/login"
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10"
-              >
-                <ArrowLeft size={16} />
-                Back to login
-              </Link>
-            </AuroraCard>
+                <Link to="/login" className={brutalBtnSecondary}>
+                  <ArrowLeft size={16} className="mr-2" />
+                  Back to login
+                </Link>
+              </BrutalCard>
+            </>
           )}
+
+          {isLoading && verificationStatus !== 'verifying' && null}
         </div>
       </div>
-    </AuroraScreen>
+    </BrutalistScreen>
   );
 };
 
