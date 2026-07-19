@@ -23,6 +23,7 @@ import LoadingSpinner, { LoadingOverlay } from '../../components/UI/LoadingSpinn
 import Modal from '../../components/UI/Modal';
 import BudgetForm from '../../components/Forms/BudgetForm';
 import ConfirmationDialog from '../../components/UI/ConfirmationDialog';
+import BrutalistScreen from '../../components/layout/BrutalistScreen';
 import { toast } from 'react-hot-toast';
 
 const Budgets = () => {
@@ -382,6 +383,7 @@ const Budgets = () => {
   }
 
   return (
+    <BrutalistScreen>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -798,6 +800,7 @@ const Budgets = () => {
         isLoading={isDeletingBudget}
       />
     </div>
+    </BrutalistScreen>
   );
 };
 

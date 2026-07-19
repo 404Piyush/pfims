@@ -7,6 +7,8 @@ import * as yup from 'yup';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { requestOtp, verifyOtp, resendVerificationEmail } from '../../store/slices/authSlice';
 import { InlineSpinner } from '../../components/UI/LoadingSpinner';
+import AuroraScreen from '../../components/layout/AuroraScreen';
+import AuroraCard from '../../components/ui/AuroraCard';
 
 // Validation schema
 const loginSchema = yup.object({
@@ -113,27 +115,28 @@ const Login = () => {
         };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-secondary-100 py-12 px-4 sm:px-6 lg:px-8">
+    <AuroraScreen>
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 rounded-xl overflow-hidden mb-4">
+          <div className="mx-auto h-16 w-16 rounded-xl overflow-hidden mb-4 bg-white/10 backdrop-blur border border-white/15">
             <img
               src="/logo.png"
               alt="PFIMS Logo"
               className="h-16 w-16 object-contain"
             />
           </div>
-          <h2 className="text-3xl font-bold text-secondary-900">
+          <h2 className="text-3xl font-bold tracking-tight text-white">
             Welcome back to PFIMS
           </h2>
-          <p className="mt-2 text-sm text-secondary-600">
+          <p className="mt-2 text-sm text-white/60">
             Sign in to your account to manage your finances
           </p>
         </div>
 
         {/* Login Form */}
-        <div className="bg-white rounded-xl shadow-lg p-8">
+        <AuroraCard accent="indigo" className="p-8">
           <form className="space-y-6" onSubmit={handleFormSubmit}>
             {/* Email Field */}
             <div className="form-group">
@@ -382,9 +385,10 @@ const Login = () => {
               Fast
             </div>
           </div>
-        </div>
+        </AuroraCard>
       </div>
-    </div>
+      </div>
+    </AuroraScreen>
   );
 };
 

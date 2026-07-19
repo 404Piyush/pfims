@@ -104,7 +104,39 @@ module.exports = {
           700: '#b91c1c',
           800: '#991b1b',
           900: '#7f1d1d',
-        }
+        },
+        // ----- Aurora palette: indigo → cyan → pink -----
+        brand: {
+          indigo: '#6366f1',
+          'indigo-soft': '#a5b4fc',
+          'indigo-deep': '#312e81',
+          cyan: '#06b6d4',
+          'cyan-soft': '#67e8f9',
+          'cyan-deep': '#155e75',
+          pink: '#ec4899',
+          'pink-soft': '#f9a8d4',
+          'pink-deep': '#831843',
+        },
+        // ----- Brutalist surfaces -----
+        brutal: {
+          paper: '#f5f5f0',
+          ink: '#0a0a0a',
+          accent: '#ff3b3b',
+          shadow: '#0a0a0a',
+        },
+        // ----- Dark surface palette (used by Aurora screens) -----
+        ink: {
+          950: '#06070d',
+          900: '#0a0a14',
+          800: '#11121a',
+          700: '#1a1c28',
+          600: '#24273a',
+          500: '#3a3f55',
+          400: '#6b7088',
+          300: '#9aa0aa',
+          200: '#cdd2dc',
+          100: '#e5e8ef',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
@@ -136,6 +168,8 @@ module.exports = {
         'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
         'medium': '0 4px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
         'large': '0 10px 40px -10px rgba(0, 0, 0, 0.15), 0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+        // Brutalist offset solid shadow
+        'brutal': '8px 8px 0 0 #0a0a0a',
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',

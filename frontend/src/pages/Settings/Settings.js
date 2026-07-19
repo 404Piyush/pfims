@@ -212,7 +212,7 @@ const Settings = () => {
       setDeleteConfirmation('');
       setDeletePassword('');
       alert('Your account has been deactivated.');
-      localStorage.removeItem('token');
+      localStorage.removeItem('pfims.token.legacy');
       window.location.href = '/login';
     } catch (error) {
       console.error('Account deactivation failed:', error);

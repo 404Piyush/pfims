@@ -13,6 +13,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
+import AuroraScreen from '../../components/layout/AuroraScreen';
+import NumberStat from '../../components/ui/NumberStat';
 import api from '../../services/api';
 
 const pctChange = (current, previous) => {
@@ -252,14 +254,15 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <AuroraScreen>
+    <div className="space-y-6 text-white">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-secondary-900">
+          <h1 className="text-2xl font-bold text-white">
             Welcome back, {user?.firstName}!
           </h1>
-          <p className="text-secondary-600 mt-1">
+          <p className="text-white/75 mt-1">
             Here's your financial overview for {dashboardData.rangeLabel || format(new Date(), 'MMMM yyyy')}
           </p>
         </div>
@@ -267,7 +270,7 @@ const Dashboard = () => {
           <select
             value={selectedPeriod}
             onChange={(e) => setSelectedPeriod(e.target.value)}
-            className="px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="px-3 py-2 border border-white/15 bg-white/[0.06] text-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan"
           >
             <option value="week">This Week</option>
             <option value="month">This Month</option>
@@ -276,7 +279,7 @@ const Dashboard = () => {
           </select>
           <button
             onClick={() => navigate('/transactions/new')}
-            className="btn-primary flex items-center space-x-2"
+            className="inline-flex items-center gap-2 rounded-md bg-gradient-to-br from-brand-indigo via-brand-cyan to-brand-pink px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity"
           >
             <PlusIcon className="h-4 w-4" />
             <span>Add Transaction</span>
@@ -284,57 +287,43 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title="Net Cash Flow"
-          value={formatCurrency(dashboardData.summary.net)}
-          change={Number.isFinite(dashboardData.changes?.net) ? 
-            `${dashboardData.changes.net >= 0 ? '+' : ''}${dashboardData.changes.net.toFixed(1)}% vs previous period` : 
-            undefined}
-          icon={BanknotesIcon}
-          color="primary"
-          trend={Number(dashboardData.summary.net) >= 0 ? "up" : "down"}
+      {/* KPI cards (aurora glass + tabular numbers) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <NumberStat
+          label="Net Cash Flow"
+          value={formatCurrency(dashboardData.summary.net).replace(/^./, (c) => c)}
+          delta={Number(dashboardData.changes?.net)}
+          trend="previous period"
         />
-        <StatCard
-          title="Income"
-          value={formatCurrency(dashboardData.summary.income)}
-          change={Number.isFinite(dashboardData.changes?.income) ? 
-            `${dashboardData.changes.income >= 0 ? '+' : ''}${dashboardData.changes.income.toFixed(1)}% vs previous period` : 
-            undefined}
-          icon={ArrowTrendingUpIcon}
-          color="success"
-          trend={Number(dashboardData.summary.income) >= 0 ? "up" : "down"}
+        <NumberStat
+          label="Income"
+          value={formatCurrency(dashboardData.summary.income).replace(/^./, (c) => c)}
+          delta={Number(dashboardData.changes?.income)}
+          trend="previous period"
         />
-        <StatCard
-          title="Expenses"
-          value={formatCurrency(dashboardData.summary.expenses)}
-          change={Number.isFinite(dashboardData.changes?.expenses) ? 
-            `${dashboardData.changes.expenses >= 0 ? '+' : ''}${dashboardData.changes.expenses.toFixed(1)}% vs previous period` : 
-            undefined}
-          icon={ArrowTrendingDownIcon}
-          color="danger"
-          trend={Number(dashboardData.summary.expenses) >= 0 ? "up" : "down"}
+        <NumberStat
+          label="Expenses"
+          value={formatCurrency(dashboardData.summary.expenses).replace(/^./, (c) => c)}
+          delta={Number(dashboardData.changes?.expenses)}
+          trend="previous period"
         />
-        <StatCard
-          title="Savings Rate"
-          value={`${(Number(dashboardData.summary.savingsRate) || 0).toFixed(1)}%`}
-          change={undefined}
-          icon={ChartBarIcon}
-          color="primary"
-          trend={Number(dashboardData.summary.savingsRate) >= 0 ? "up" : "down"}
+        <NumberStat
+          label="Savings Rate"
+          value={`${(Number(dashboardData.summary.savingsRate) || 0).toFixed(1)}`}
+          suffix="%"
+          delta={undefined}
         />
       </div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Monthly Trend Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-6">
+        <div className="rounded-xl border border-white/10 bg-white/[0.05] backdrop-blur-xl p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-secondary-900">
+            <h3 className="text-lg font-semibold text-white">
               Income vs Expenses
             </h3>
-            <button className="text-sm text-primary-600 hover:text-primary-700 font-medium">
+            <button className="text-sm text-brand-cyan hover:text-white font-medium">
               View Details
             </button>
           </div>
@@ -377,12 +366,12 @@ const Dashboard = () => {
         </div>
 
         {/* Category Breakdown */}
-        <div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-6">
+        <div className="rounded-xl border border-white/10 bg-white/[0.05] backdrop-blur-xl p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-secondary-900">
+            <h3 className="text-lg font-semibold text-white">
               Expense Categories
             </h3>
-            <button className="text-sm text-primary-600 hover:text-primary-700 font-medium">
+            <button className="text-sm text-brand-cyan hover:text-white font-medium">
               View All
             </button>
           </div>
@@ -413,14 +402,14 @@ const Dashboard = () => {
       {/* Bottom Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Transactions */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-secondary-200 p-6">
+        <div className="lg:col-span-2 rounded-xl border border-white/10 bg-white/[0.05] backdrop-blur-xl p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-secondary-900">
+            <h3 className="text-lg font-semibold text-white">
               Recent Transactions
             </h3>
             <button
               onClick={() => navigate('/transactions')}
-              className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center space-x-1"
+              className="text-sm text-brand-cyan hover:text-white font-medium flex items-center space-x-1"
             >
               <span>View All</span>
               <EyeIcon className="h-4 w-4" />
@@ -430,28 +419,28 @@ const Dashboard = () => {
             {dashboardData.recentTransactions.map((transaction) => (
               <div
                 key={transaction.id}
-                className="flex items-center justify-between p-3 rounded-lg hover:bg-secondary-50 transition-colors cursor-pointer"
+                className="flex items-center justify-between p-3 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() => navigate(`/transactions/${transaction.id}`)}
               >
                 <div className="flex items-center space-x-3">
                   <div className={`p-2 rounded-lg ${
-                    transaction.type === 'income' ? 'bg-success-100' : 'bg-danger-100'
+                    transaction.type === 'income' ? 'bg-emerald-500/15' : 'bg-rose-500/15'
                   }`}>
                     <CreditCardIcon className={`h-4 w-4 ${
-                      transaction.type === 'income' ? 'text-success-600' : 'text-danger-600'
+                      transaction.type === 'income' ? 'text-emerald-300' : 'text-rose-300'
                     }`} />
                   </div>
                   <div>
-                    <p className="font-medium text-secondary-900">
+                    <p className="font-medium text-white">
                       {transaction.description}
                     </p>
-                    <p className="text-sm text-secondary-500">
+                    <p className="text-sm text-white/55 tabular-nums">
                       {transaction.category} • {format(new Date(transaction.date), 'MMM dd')}
                     </p>
                   </div>
                 </div>
-                <div className={`font-semibold ${
-                  transaction.amount > 0 ? 'text-success-600' : 'text-danger-600'
+                <div className={`font-semibold tabular-nums ${
+                  transaction.amount > 0 ? 'text-emerald-300' : 'text-rose-300'
                 }`}>
                   {transaction.amount > 0 ? '+' : ''}{formatCurrency(transaction.amount)}
                 </div>
@@ -461,14 +450,14 @@ const Dashboard = () => {
         </div>
 
         {/* Budget Progress */}
-        <div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-6">
+        <div className="rounded-xl border border-white/10 bg-white/[0.05] backdrop-blur-xl p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-secondary-900">
+            <h3 className="text-lg font-semibold text-white">
               Budget Progress
             </h3>
             <button
               onClick={() => navigate('/budgets')}
-              className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+              className="text-sm text-brand-cyan hover:text-white font-medium"
             >
               Manage
             </button>
@@ -477,36 +466,36 @@ const Dashboard = () => {
             {dashboardData.budgetProgress.map((budget) => (
               <div key={budget.id || budget.name}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-secondary-700">
+                  <span className="text-sm font-medium text-white">
                     {budget.name}
                   </span>
-                  <span className="text-sm text-secondary-500">
+                  <span className="text-sm text-white/55 tabular-nums">
                     {formatCurrency(budget.spent)} / {formatCurrency(budget.budgeted)}
                   </span>
                 </div>
-                <div className="w-full bg-secondary-200 rounded-full h-2">
+                <div className="w-full bg-white/10 rounded-full h-2">
                   <div
                     className={`h-2 rounded-full transition-all duration-300 ${
                       budget.percentage > 90
-                        ? 'bg-danger-500'
+                        ? 'bg-rose-500'
                         : budget.percentage > 75
-                        ? 'bg-warning-500'
-                        : 'bg-success-500'
+                        ? 'bg-amber-400'
+                        : 'bg-emerald-400'
                     }`}
                     style={{ width: `${Math.min(budget.percentage, 100)}%` }}
                   />
                 </div>
                 <div className="flex justify-between items-center mt-1">
-                  <span className={`text-xs font-medium ${
+                  <span className={`text-xs font-medium tabular-nums ${
                     budget.percentage > 90
-                      ? 'text-danger-600'
+                      ? 'text-rose-300'
                       : budget.percentage > 75
-                      ? 'text-warning-600'
-                      : 'text-success-600'
+                      ? 'text-amber-300'
+                      : 'text-emerald-300'
                   }`}>
                     {Number(budget.percentage || 0).toFixed(0)}% used
                   </span>
-                  <span className="text-xs text-secondary-500">
+                  <span className="text-xs text-white/55 tabular-nums">
                     {formatCurrency(budget.budgeted - budget.spent)} left
                   </span>
                 </div>
@@ -516,6 +505,7 @@ const Dashboard = () => {
         </div>
       </div>
     </div>
+    </AuroraScreen>
   );
 };
 

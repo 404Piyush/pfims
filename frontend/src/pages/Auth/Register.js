@@ -5,6 +5,8 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { clsx } from 'clsx';
+import AuroraScreen from '../../components/layout/AuroraScreen';
+import AuroraCard from '../../components/ui/AuroraCard';
 import {
   EyeIcon,
   EyeSlashIcon,
@@ -155,7 +157,8 @@ const Register = () => {
   ];
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-secondary-50 py-12 px-4 sm:px-6 lg:px-8">
+    <AuroraScreen>
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
@@ -537,6 +540,7 @@ const Register = () => {
         </form>
       </div>
     </div>
+    </AuroraScreen>
   );
 };
 

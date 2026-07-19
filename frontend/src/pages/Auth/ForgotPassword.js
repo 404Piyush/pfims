@@ -6,6 +6,8 @@ import * as yup from 'yup';
 import { useDispatch, useSelector } from 'react-redux';
 import { forgotPassword } from '../../store/slices/authSlice';
 import { ArrowLeftIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
+import AuroraScreen from '../../components/layout/AuroraScreen';
+import AuroraCard from '../../components/ui/AuroraCard';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
 
 const schema = yup.object({
@@ -40,9 +42,10 @@ const ForgotPassword = () => {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <AuroraScreen>
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
-          <div className="bg-white rounded-2xl shadow-xl p-8">
+          <AuroraCard accent="cyan" className="p-8">
             <div className="text-center">
               <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-success-100 mb-6">
                 <EnvelopeIcon className="h-8 w-8 text-success-600" />
@@ -71,16 +74,18 @@ const ForgotPassword = () => {
                 </button>
               </div>
             </div>
-          </div>
+          </AuroraCard>
         </div>
       </div>
+      </AuroraScreen>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <AuroraScreen>
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <AuroraCard accent="cyan" className="p-8">
           <div className="text-center">
             <Link
               to="/login"
@@ -147,9 +152,10 @@ const ForgotPassword = () => {
               </Link>
             </p>
           </div>
-        </div>
+        </AuroraCard>
       </div>
     </div>
+    </AuroraScreen>
   );
 };
 

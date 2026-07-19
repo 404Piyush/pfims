@@ -14,6 +14,8 @@ import {
   XCircleIcon
 } from '@heroicons/react/24/outline';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
+import AuroraScreen from '../../components/layout/AuroraScreen';
+import AuroraCard from '../../components/ui/AuroraCard';
 
 const schema = yup.object({
   password: yup
@@ -89,16 +91,17 @@ const ResetPassword = () => {
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <AuroraScreen>
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
-          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+          <AuroraCard accent="pink" className="p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-danger-100 mb-6">
               <XCircleIcon className="h-8 w-8 text-danger-600" />
             </div>
-            <h2 className="text-2xl font-bold text-secondary-900 mb-2">
+            <h2 className="text-2xl font-bold text-white mb-2">
               Invalid Reset Link
             </h2>
-            <p className="text-secondary-600 mb-6">
+            <p className="text-white/70 mb-6">
               This password reset link is invalid or has expired. Please request a new one.
             </p>
             <Link
@@ -107,16 +110,18 @@ const ResetPassword = () => {
             >
               Request new reset link
             </Link>
-          </div>
+          </AuroraCard>
         </div>
       </div>
+      </AuroraScreen>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <AuroraScreen>
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <AuroraCard accent="indigo" className="p-8">
           <div className="text-center">
             <Link
               to="/login"
@@ -242,9 +247,10 @@ const ResetPassword = () => {
               )}
             </button>
           </form>
-        </div>
+        </AuroraCard>
       </div>
     </div>
+    </AuroraScreen>
   );
 };
 

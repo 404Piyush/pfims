@@ -7,169 +7,138 @@ const navigateTo = (path) => {
   window.dispatchEvent(new PopStateEvent('popstate'));
 };
 
-// Create axios instance
+// Read the XSRF cookie value. csrf-csrf writes `pfims_csrf` readable by JS.
+function readCsrfCookie() {
+  const name = 'pfims_csrf=';
+  for (const c of (document.cookie || '').split(';')) {
+    const trimmed = c.trim();
+    if (trimmed.startsWith(name)) return decodeURIComponent(trimmed.slice(name.length));
+  }
+  return '';
+}
+
+// One-shot bootstrap to obtain the CSRF token cookie. Called by the auth
+// slice before the first state-changing request.
+let csrfBootPromise = null;
+export async function ensureCsrf() {
+  if (readCsrfCookie()) return;
+  if (csrfBootPromise) return csrfBootPromise;
+  csrfBootPromise = axios
+    .get(
+      (process.env.REACT_APP_API_URL || 'http://localhost:3001/api') + '/csrf',
+      { withCredentials: true }
+    )
+    .catch(() => null)
+    .finally(() => {
+      csrfBootPromise = null;
+    });
+  return csrfBootPromise;
+}
+
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
   timeout: 15000,
+  withCredentials: true, // send/receive the httpOnly JWT cookie
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor:
+// - Authorization header still wins (useful for the rare non-cookie client)
+// - Otherwise rely on the httpOnly cookie.
+// - Inject X-CSRF-Token for state-changing methods.
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const method = (config.method || 'get').toUpperCase();
+    const token = localStorage.getItem('pfims.token.legacy');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      const csrf = readCsrfCookie();
+      if (csrf) config.headers['X-CSRF-Token'] = csrf;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor for error handling
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
     const { response } = error;
-
-    // Handle network errors
     if (!response) {
       toast.error('Network error. Please check your connection.');
       return Promise.reject(error);
     }
-
-    // Handle different status codes
     switch (response.status) {
       case 401:
-        localStorage.removeItem('token');
+        localStorage.removeItem('pfims.token.legacy');
         {
           const url = response?.config?.url || '';
           const isAuthRequest =
-            url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/otp/');
+            url.includes('/auth/login') ||
+            url.includes('/auth/register') ||
+            url.includes('/auth/otp/');
           if (!isAuthRequest) {
             toast.error('Session expired. Please login again.');
             navigateTo('/login');
           }
         }
         break;
-
       case 403:
-        // Forbidden
         toast.error('You do not have permission to perform this action.');
         break;
-
       case 404:
-        // Not found
         if (!response.config.url.includes('/auth/me')) {
           toast.error('Resource not found.');
         }
         break;
-
-      case 422:
-        // Validation error
+      case 422: {
         const validationErrors = response.data?.errors;
         if (validationErrors && Array.isArray(validationErrors)) {
-          validationErrors.forEach((err) => {
-            toast.error(err.message || err.msg);
-          });
+          validationErrors.forEach((err) => toast.error(err.message || err.msg));
         } else {
           toast.error(response.data?.message || 'Validation error.');
         }
         break;
-
+      }
       case 429:
-        // Rate limit exceeded
         toast.error('Too many requests. Please try again later.');
         break;
-
       case 500:
-        // Server error
         toast.error('Server error. Please try again later.');
         break;
-
-      default:
-        // Other errors
+      default: {
         const message = response.data?.message || 'An error occurred.';
-        if (!response.config.skipErrorToast) {
-          toast.error(message);
-        }
+        if (!response.config.skipErrorToast) toast.error(message);
         break;
+      }
     }
-
     return Promise.reject(error);
   }
 );
 
-// Helper functions for common API patterns
 export const apiHelpers = {
-  // GET request with query parameters
-  get: (url, params = {}) => {
-    return api.get(url, { params });
-  },
-
-  // POST request
-  post: (url, data = {}) => {
-    return api.post(url, data);
-  },
-
-  // PUT request
-  put: (url, data = {}) => {
-    return api.put(url, data);
-  },
-
-  // PATCH request
-  patch: (url, data = {}) => {
-    return api.patch(url, data);
-  },
-
-  // DELETE request
-  delete: (url) => {
-    return api.delete(url);
-  },
-
-  // Upload file
-  upload: (url, formData, onUploadProgress = null) => {
-    return api.post(url, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      onUploadProgress,
-    });
-  },
-
-  // Download file
-  download: (url, filename) => {
-    return api.get(url, {
-      responseType: 'blob',
-    }).then((response) => {
+  get: (url, params = {}) => api.get(url, { params }),
+  post: (url, data = {}) => api.post(url, data),
+  put: (url, data = {}) => api.put(url, data),
+  patch: (url, data = {}) => api.patch(url, data),
+  delete: (url) => api.delete(url),
+  upload: (url, formData, onUploadProgress = null) =>
+    api.post(url, formData, { headers: { 'Content-Type': 'multipart/form-data' }, onUploadProgress }),
+  download: (url, filename) =>
+    api.get(url, { responseType: 'blob' }).then((response) => {
       const blob = new Blob([response.data]);
-      const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = downloadUrl;
+      link.href = window.URL.createObjectURL(blob);
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-    });
-  },
-
-  // Request without error toast
-  silentRequest: (method, url, data = {}) => {
-    return api.request({
-      method,
-      url,
-      data,
-      skipErrorToast: true,
-    });
-  },
+      window.URL.revokeObjectURL(link.href);
+    }),
+  silentRequest: (method, url, data = {}) =>
+    api.request({ method, url, data, skipErrorToast: true }),
 };
 
-// Export the configured axios instance
 export default api;

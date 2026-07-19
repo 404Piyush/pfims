@@ -100,3 +100,33 @@ logs
 # Backup files
 *.bak
 *.backup
+
+# ----------------------------------------------------------------
+# Personal-finance data — never commit user statements or exports.
+# These were previously committed by mistake; we drop them from
+# history and ignore them going forward.
+# ----------------------------------------------------------------
+AccountStatement_*
+Email_Statement_*
+*BankStatement*.pdf
+*Statement*.pdf
+*Statement*.xlsx
+debug_*.js
+debug/
+
+# Local Ollama model snapshots (~GB each)
+ollama-models/
+
+# Generated documentation blurbs (kept in repo: only the canonical README/CHANGELOG)
+prompt.txt
+Technical_Implementation_Code.txt
+RECENT_CHANGES.md
+OPTIMIZATION_SUMMARY.md
+
+# CI / tooling caches
+.gitleaks/
+.cache-eslint/
+
+# IDE
+.cursor/
+.aider*

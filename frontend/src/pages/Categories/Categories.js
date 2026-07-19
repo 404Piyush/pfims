@@ -16,6 +16,7 @@ import LoadingSpinner, { LoadingOverlay } from '../../components/UI/LoadingSpinn
 import Modal from '../../components/UI/Modal';
 import CategoryForm from '../../components/Forms/CategoryForm';
 import ConfirmationDialog from '../../components/UI/ConfirmationDialog';
+import BrutalistScreen from '../../components/layout/BrutalistScreen';
 import { toast } from 'react-hot-toast';
 import api from '../../services/api';
 
@@ -236,6 +237,7 @@ const Categories = () => {
   }
 
   return (
+    <BrutalistScreen>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -518,6 +520,7 @@ const Categories = () => {
         isLoading={isDeletingCategory}
       />
     </div>
+    </BrutalistScreen>
   );
 };
 

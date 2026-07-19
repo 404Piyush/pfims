@@ -1,31 +1,46 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+// Cookie name matches the issuer in routes/auth.js. Kept here as a fallback
+// to avoid a circular require; routes/auth.js exports the canonical name.
+const AUTH_COOKIE = 'pfims_token';
+
+// Read the JWT from either the Authorization header or the httpOnly cookie.
+function extractToken(req) {
+  const header = req.header('Authorization') || req.header('x-auth-token');
+  if (header) {
+    const t = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : header.trim();
+    if (t) return t;
+  }
+  if (req.cookies && req.cookies[AUTH_COOKIE]) return req.cookies[AUTH_COOKIE];
+  return null;
+}
+
 // Verify JWT token
 const auth = async (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
+    const token = extractToken(req);
+
     if (!token) {
-      return res.status(401).json({ 
-        message: 'Access denied. No token provided.' 
+      return res.status(401).json({
+        message: 'Access denied. No token provided.',
       });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Get user from database
     const user = await User.findById(decoded.id).select('-password');
-    
+
     if (!user) {
-      return res.status(401).json({ 
-        message: 'Token is not valid. User not found.' 
+      return res.status(401).json({
+        message: 'Token is not valid. User not found.',
       });
     }
 
     if (!user.isActive) {
-      return res.status(401).json({ 
-        message: 'Account is deactivated.' 
+      return res.status(401).json({
+        message: 'Account is deactivated.',
       });
     }
 
@@ -33,20 +48,20 @@ const auth = async (req, res, next) => {
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ 
-        message: 'Token is not valid.' 
+      return res.status(401).json({
+        message: 'Token is not valid.',
       });
     }
-    
+
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ 
-        message: 'Token has expired.' 
+      return res.status(401).json({
+        message: 'Token has expired.',
       });
     }
-    
+
     console.error('Auth middleware error:', error);
-    res.status(500).json({ 
-      message: 'Server error during authentication.' 
+    res.status(500).json({
+      message: 'Server error during authentication.',
     });
   }
 };
@@ -71,17 +86,17 @@ const adminAuth = async (req, res, next) => {
 // Optional auth - doesn't fail if no token
 const optionalAuth = async (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
+    const token = extractToken(req);
+
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const user = await User.findById(decoded.id).select('-password');
-      
+
       if (user && user.isActive) {
         req.user = user;
       }
     }
-    
+
     next();
   } catch (error) {
     // Continue without user if token is invalid

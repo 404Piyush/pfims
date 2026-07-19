@@ -52,6 +52,30 @@ const extractAssistantMessage = (data) => {
   );
 };
 
+// --- Prompt-injection defense -----------------------------------
+// `extraContext` is caller-supplied (used by client to dump transactions,
+// budgets, etc. into the prompt). Treat it as untrusted text and scrub
+// common injection markers before forwarding to the model.
+const INJECTION_PATTERNS = [
+  // "ignore prior instructions", "you are now ...", "system:"
+  /^\s*(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)/gim,
+  /\b(system\s*prompt|developer\s*message)\s*:/gi,
+  /\b(act\s+as|you\s+are\s+now|from\s+now\s+on|begin\s+simulation)\b[^.\n]*\b(admin|root|jailbreak|unfiltered|developer\s+mode|god\s+mode)\b/gi,
+  /<\/?(system|assistant|user|tool|function)[^>]*>/gi,
+  /```\s*(system|prompt|admin)\b/gi,
+  /\bDAN\b[^.\n]{0,80}\bjailbreak/gi,
+];
+
+const sanitizeExtraContext = (raw) => {
+  if (typeof raw !== 'string') return '';
+  let s = raw.slice(0, 60000);
+  for (const re of INJECTION_PATTERNS) s = s.replace(re, ' ');
+  // Collapse runs of whitespace and strip control chars.
+  s = s.replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '');
+  s = s.replace(/[ \t]{4,}/g, '   ');
+  return s.trim();
+};
+
 const extractFinishReason = (data) => {
   return (
     data?.choices?.[0]?.finish_reason ||
@@ -212,9 +236,11 @@ router.post(
         filteredHistory = [];
       }
 
-      // Compose messages for provider call (append current user message at the end)
-      const combinedUserMessage = extraContext
-        ? `${message}\n\n---\nAdditional data (do not repeat verbatim; use for analysis only):\n${String(extraContext).slice(0, 60000)}`
+      // Compose messages for provider call (append current user message at the end).
+      // extraContext is sanitized to strip prompt-injection attempts.
+      const sanitizedExtra = sanitizeExtraContext(extraContext);
+      const combinedUserMessage = sanitizedExtra
+        ? `${message}\n\n---\nAdditional data (do not repeat verbatim; use for analysis only):\n${sanitizedExtra}`
         : message;
       const messages = [
         { role: 'system', content: SYSTEM_PROMPT },

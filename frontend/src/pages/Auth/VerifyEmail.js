@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { verifyEmail, resendVerificationEmail } from '../../store/slices/authSlice';
-import { 
-  CheckCircleIcon, 
-  XCircleIcon, 
+import {
+  CheckCircleIcon,
+  XCircleIcon,
   EnvelopeIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
+import AuroraScreen from '../../components/layout/AuroraScreen';
+import AuroraCard from '../../components/ui/AuroraCard';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
 
 const VerifyEmail = () => {
@@ -77,36 +79,39 @@ const VerifyEmail = () => {
 
   if (verificationStatus === 'verifying') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <AuroraScreen>
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
-          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+          <AuroraCard accent="indigo" className="p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-primary-100 mb-6">
               <LoadingSpinner size="md" color="primary" />
             </div>
-            <h2 className="text-2xl font-bold text-secondary-900 mb-2">
+            <h2 className="text-2xl font-bold text-white mb-2">
               Verifying your email
             </h2>
-            <p className="text-secondary-600">
+            <p className="text-white/70">
               Please wait while we verify your email address...
             </p>
-          </div>
+          </AuroraCard>
         </div>
       </div>
+      </AuroraScreen>
     );
   }
 
   if (verificationStatus === 'success') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <AuroraScreen>
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
-          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+          <AuroraCard accent="cyan" className="p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-success-100 mb-6">
               <CheckCircleIcon className="h-8 w-8 text-success-600" />
             </div>
-            <h2 className="text-2xl font-bold text-secondary-900 mb-2">
+            <h2 className="text-2xl font-bold text-white mb-2">
               Email verified successfully!
             </h2>
-            <p className="text-secondary-600 mb-6">
+            <p className="text-white/70 mb-6">
               Your email has been verified. You will be redirected to the dashboard shortly.
             </p>
             <Link
@@ -115,16 +120,18 @@ const VerifyEmail = () => {
             >
               Go to Dashboard
             </Link>
-          </div>
+          </AuroraCard>
         </div>
       </div>
+      </AuroraScreen>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <AuroraScreen>
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+        <AuroraCard accent="pink" className="p-8 text-center">
           <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-danger-100 mb-6">
             <XCircleIcon className="h-8 w-8 text-danger-600" />
           </div>
@@ -180,9 +187,10 @@ const VerifyEmail = () => {
               Back to login
             </Link>
           </div>
-        </div>
+        </AuroraCard>
       </div>
     </div>
+    </AuroraScreen>
   );
 };
 

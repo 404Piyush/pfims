@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { clsx } from 'clsx';
+import clsx from 'clsx';
 import {
   HomeIcon,
   CreditCardIcon,
@@ -17,92 +17,62 @@ import {
   ChevronRightIcon,
   ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline';
-import {
-  HomeIcon as HomeIconSolid,
-  CreditCardIcon as CreditCardIconSolid,
-  TagIcon as TagIconSolid,
-  ChartBarIcon as ChartBarIconSolid,
-  DocumentChartBarIcon as DocumentChartBarIconSolid,
-  BriefcaseIcon as BriefcaseIconSolid,
-  BanknotesIcon as BanknotesIconSolid,
-  PresentationChartLineIcon as PresentationChartLineIconSolid,
-  UserIcon as UserIconSolid,
-  Cog6ToothIcon as Cog6ToothIconSolid,
-  ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
-} from '@heroicons/react/24/solid';
 import { toggleSidebar } from '../../store/slices/uiSlice';
 
 const navigation = [
-  {
-    name: 'Dashboard',
-    href: '/',
-    icon: HomeIcon,
-    iconSolid: HomeIconSolid,
-  },
-  {
-    name: 'Transactions',
-    href: '/transactions',
-    icon: CreditCardIcon,
-    iconSolid: CreditCardIconSolid,
-  },
-  {
-    name: 'Categories',
-    href: '/categories',
-    icon: TagIcon,
-    iconSolid: TagIconSolid,
-  },
-  {
-    name: 'Budgets',
-    href: '/budgets',
-    icon: ChartBarIcon,
-    iconSolid: ChartBarIconSolid,
-  },
-  {
-    name: 'Reports',
-    href: '/reports',
-    icon: DocumentChartBarIcon,
-    iconSolid: DocumentChartBarIconSolid,
-  },
-  {
-    name: 'Portfolio',
-    href: '/portfolio',
-    icon: BriefcaseIcon,
-    iconSolid: BriefcaseIconSolid,
-  },
-  {
-    name: 'Stock Analysis',
-    href: '/stocks/analyse',
-    icon: PresentationChartLineIcon,
-    iconSolid: PresentationChartLineIconSolid,
-  },
-  {
-    name: 'Mutual Funds',
-    href: '/mutual-funds',
-    icon: BanknotesIcon,
-    iconSolid: BanknotesIconSolid,
-  },
-  {
-    name: 'Assistant',
-    href: '/assistant',
-    icon: ChatBubbleLeftRightIcon,
-    iconSolid: ChatBubbleLeftRightIconSolid,
-  },
+  { name: 'Dashboard',         href: '/',                   icon: HomeIcon },
+  { name: 'Transactions',      href: '/transactions',       icon: CreditCardIcon },
+  { name: 'Categories',        href: '/categories',         icon: TagIcon },
+  { name: 'Budgets',           href: '/budgets',            icon: ChartBarIcon },
+  { name: 'Reports',           href: '/reports',            icon: DocumentChartBarIcon },
+  { name: 'Portfolio',         href: '/portfolio',          icon: BriefcaseIcon },
+  { name: 'Stock Analysis',    href: '/stocks/analyse',     icon: PresentationChartLineIcon },
+  { name: 'Mutual Funds',      href: '/mutual-funds',       icon: BanknotesIcon },
+  { name: 'Assistant',         href: '/assistant',          icon: ChatBubbleLeftRightIcon },
 ];
 
 const secondaryNavigation = [
-  {
-    name: 'Profile',
-    href: '/profile',
-    icon: UserIcon,
-    iconSolid: UserIconSolid,
-  },
-  {
-    name: 'Settings',
-    href: '/settings',
-    icon: Cog6ToothIcon,
-    iconSolid: Cog6ToothIconSolid,
-  },
+  { name: 'Profile',  href: '/profile',  icon: UserIcon },
+  { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
 ];
+
+const ringStyle = {
+  // thin double-stroke to nod at the brutalist borders without breaking minimalist layout
+  boxShadow: 'inset 0 0 0 1px rgba(15, 23, 42, 0.06)',
+};
+
+function NavItem({ item, collapsed, onClick }) {
+  const Icon = item.icon;
+  return (
+    <NavLink
+      key={item.name}
+      to={item.href}
+      onClick={onClick}
+      title={collapsed ? item.name : undefined}
+      className={({ isActive }) =>
+        clsx(
+          'group relative flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+          isActive
+            ? 'bg-brand-indigo-soft text-brand-indigo-deep ring-1 ring-brand-indigo/30'
+            : 'text-ink-700 hover:bg-ink-100 hover:text-ink-950 dark:text-white/75 dark:hover:bg-white/5 dark:hover:text-white'
+        )
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && (
+            <span
+              aria-hidden
+              className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-brand-indigo"
+            />
+          )}
+          <Icon className="flex-shrink-0 h-5 w-5" />
+          {!collapsed && <span className="ml-3 truncate">{item.name}</span>}
+        </>
+      )}
+    </NavLink>
+  );
+}
 
 const Sidebar = () => {
   const dispatch = useDispatch();
@@ -110,223 +80,122 @@ const Sidebar = () => {
   const { sidebarOpen } = useSelector((state) => state.ui);
   const { user } = useSelector((state) => state.auth);
 
-  const isActive = (href) => {
-    if (href === '/') {
-      return location.pathname === '/';
-    }
-    return location.pathname.startsWith(href);
-  };
+  const isActive = (href) =>
+    href === '/' ? location.pathname === '/' : location.pathname.startsWith(href);
 
   return (
     <>
       {/* Desktop sidebar */}
-      <div className={clsx(
-        'fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-secondary-200 transition-all duration-300',
-        sidebarOpen ? 'w-64' : 'w-16',
-        'hidden lg:flex'
-      )}>
-        {/* Logo and toggle */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-secondary-200">
-          <div className={clsx(
-            'flex items-center transition-opacity duration-300',
-            sidebarOpen ? 'opacity-100' : 'opacity-0'
-          )}>
-            <div className="flex-shrink-0 h-8 w-8 rounded-lg overflow-hidden">
-              <img
-                src="/logo.png"
-                alt="PFIMS Logo"
-                className="h-8 w-8 object-contain"
-              />
+      <aside
+        className={clsx(
+          'fixed inset-y-0 left-0 z-50 hidden lg:flex flex-col bg-white dark:bg-ink-950 border-r border-ink-900/10 dark:border-white/10 transition-all duration-300',
+          sidebarOpen ? 'w-64' : 'w-16'
+        )}
+        style={ringStyle}
+      >
+        <div className="flex items-center justify-between h-16 px-4 border-b border-ink-900/10 dark:border-white/10">
+          <div className={clsx('flex items-center transition-opacity duration-300', sidebarOpen ? 'opacity-100' : 'opacity-0')}>
+            <div className="flex-shrink-0 h-8 w-8 rounded-md overflow-hidden ring-1 ring-ink-900/10 dark:ring-white/20">
+              <img src="/logo.png" alt="PFIMS Logo" className="h-8 w-8 object-contain" />
             </div>
             {sidebarOpen && (
-              <span className="ml-3 text-xl font-bold text-secondary-900">
+              <span className="ml-3 text-lg font-display font-bold tracking-tight text-ink-950 dark:text-white">
                 PFIMS
               </span>
             )}
           </div>
-          
           <button
+            type="button"
             onClick={() => dispatch(toggleSidebar())}
-            className="p-1.5 rounded-lg text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 transition-colors"
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            className="p-1.5 rounded-md text-ink-500 hover:text-ink-900 hover:bg-ink-100 dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
           >
-            {sidebarOpen ? (
-              <ChevronLeftIcon className="h-5 w-5" />
-            ) : (
-              <ChevronRightIcon className="h-5 w-5" />
-            )}
+            {sidebarOpen ? <ChevronLeftIcon className="h-5 w-5" /> : <ChevronRightIcon className="h-5 w-5" />}
           </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navigation.map((item) => {
-            const active = isActive(item.href);
-            const Icon = active ? item.iconSolid : item.icon;
-            
-            return (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                className={clsx(
-                  'group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                  active
-                    ? 'bg-primary-100 text-primary-700'
-                    : 'text-secondary-600 hover:bg-secondary-100 hover:text-secondary-900'
-                )}
-                title={!sidebarOpen ? item.name : undefined}
-              >
-                <Icon className="flex-shrink-0 h-5 w-5" />
-                {sidebarOpen && (
-                  <span className="ml-3 truncate">{item.name}</span>
-                )}
-              </NavLink>
-            );
-          })}
+        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
+          {navigation.map((item) => (
+            <NavItem key={item.name} item={item} collapsed={!sidebarOpen} />
+          ))}
         </nav>
 
-        {/* Secondary navigation */}
-        <div className="px-3 py-4 border-t border-secondary-200">
-          <div className="space-y-1">
-            {secondaryNavigation.map((item) => {
-              const active = isActive(item.href);
-              const Icon = active ? item.iconSolid : item.icon;
-              
-              return (
-                <NavLink
-                  key={item.name}
-                  to={item.href}
-                  className={clsx(
-                    'group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                    active
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'text-secondary-600 hover:bg-secondary-100 hover:text-secondary-900'
-                  )}
-                  title={!sidebarOpen ? item.name : undefined}
-                >
-                  <Icon className="flex-shrink-0 h-5 w-5" />
-                  {sidebarOpen && (
-                    <span className="ml-3 truncate">{item.name}</span>
-                  )}
-                </NavLink>
-              );
-            })}
-          </div>
+        <div className="px-2 py-4 border-t border-ink-900/10 dark:border-white/10 space-y-0.5">
+          {secondaryNavigation.map((item) => (
+            <NavItem key={item.name} item={item} collapsed={!sidebarOpen} />
+          ))}
         </div>
 
-        {/* User profile */}
         {sidebarOpen && user && (
-          <div className="px-3 py-4 border-t border-secondary-200">
+          <div className="px-4 py-4 border-t border-ink-900/10 dark:border-white/10">
             <div className="flex items-center">
-              <div className="flex-shrink-0 h-8 w-8 bg-primary-600 rounded-full flex items-center justify-center">
-                <span className="text-sm font-medium text-white">
+              <div className="flex-shrink-0 h-8 w-8 rounded-full bg-gradient-to-br from-brand-indigo to-brand-pink text-white flex items-center justify-center">
+                <span className="text-sm font-semibold">
                   {user.firstName?.[0]?.toUpperCase() || 'U'}
                 </span>
               </div>
               <div className="ml-3 min-w-0 flex-1">
-                <p className="text-sm font-medium text-secondary-900 truncate">
+                <p className="text-sm font-medium text-ink-950 dark:text-white truncate">
                   {user.firstName} {user.lastName}
                 </p>
-                <p className="text-xs text-secondary-500 truncate">
+                <p className="text-xs text-ink-500 dark:text-white/55 truncate tabular-nums">
                   {user.email}
                 </p>
               </div>
             </div>
           </div>
         )}
-      </div>
+      </aside>
 
       {/* Mobile sidebar */}
-      <div className={clsx(
-        'fixed inset-y-0 left-0 z-50 flex flex-col w-64 bg-white border-r border-secondary-200 transform transition-transform duration-300 lg:hidden',
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      )}>
-        {/* Logo */}
-        <div className="flex items-center h-16 px-4 border-b border-secondary-200">
-          <div className="flex-shrink-0 h-8 w-8 rounded-lg overflow-hidden">
-            <img
-              src="/logo.png"
-              alt="PFIMS Logo"
-              className="h-8 w-8 object-contain"
-            />
+      <aside
+        className={clsx(
+          'fixed inset-y-0 left-0 z-50 flex flex-col w-64 bg-white dark:bg-ink-950 border-r border-ink-900/10 dark:border-white/10 transform transition-transform duration-300 lg:hidden',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+        style={ringStyle}
+      >
+        <div className="flex items-center h-16 px-4 border-b border-ink-900/10 dark:border-white/10">
+          <div className="flex-shrink-0 h-8 w-8 rounded-md overflow-hidden ring-1 ring-ink-900/10 dark:ring-white/20">
+            <img src="/logo.png" alt="PFIMS Logo" className="h-8 w-8 object-contain" />
           </div>
-          <span className="ml-3 text-xl font-bold text-secondary-900">
+          <span className="ml-3 text-lg font-display font-bold tracking-tight text-ink-950 dark:text-white">
             PFIMS
           </span>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navigation.map((item) => {
-            const active = isActive(item.href);
-            const Icon = active ? item.iconSolid : item.icon;
-            
-            return (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                onClick={() => dispatch(toggleSidebar())}
-                className={clsx(
-                  'group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                  active
-                    ? 'bg-primary-100 text-primary-700'
-                    : 'text-secondary-600 hover:bg-secondary-100 hover:text-secondary-900'
-                )}
-              >
-                <Icon className="flex-shrink-0 h-5 w-5" />
-                <span className="ml-3 truncate">{item.name}</span>
-              </NavLink>
-            );
-          })}
+        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
+          {navigation.map((item) => (
+            <NavItem key={item.name} item={item} collapsed={false} onClick={() => dispatch(toggleSidebar())} />
+          ))}
         </nav>
 
-        {/* Secondary navigation */}
-        <div className="px-3 py-4 border-t border-secondary-200">
-          <div className="space-y-1">
-            {secondaryNavigation.map((item) => {
-              const active = isActive(item.href);
-              const Icon = active ? item.iconSolid : item.icon;
-              
-              return (
-                <NavLink
-                  key={item.name}
-                  to={item.href}
-                  onClick={() => dispatch(toggleSidebar())}
-                  className={clsx(
-                    'group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                    active
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'text-secondary-600 hover:bg-secondary-100 hover:text-secondary-900'
-                  )}
-                >
-                  <Icon className="flex-shrink-0 h-5 w-5" />
-                  <span className="ml-3 truncate">{item.name}</span>
-                </NavLink>
-              );
-            })}
-          </div>
+        <div className="px-2 py-4 border-t border-ink-900/10 dark:border-white/10 space-y-0.5">
+          {secondaryNavigation.map((item) => (
+            <NavItem key={item.name} item={item} collapsed={false} onClick={() => dispatch(toggleSidebar())} />
+          ))}
         </div>
 
-        {/* User profile */}
         {user && (
-          <div className="px-3 py-4 border-t border-secondary-200">
+          <div className="px-4 py-4 border-t border-ink-900/10 dark:border-white/10">
             <div className="flex items-center">
-              <div className="flex-shrink-0 h-8 w-8 bg-primary-600 rounded-full flex items-center justify-center">
-                <span className="text-sm font-medium text-white">
+              <div className="flex-shrink-0 h-8 w-8 rounded-full bg-gradient-to-br from-brand-indigo to-brand-pink text-white flex items-center justify-center">
+                <span className="text-sm font-semibold">
                   {user.firstName?.[0]?.toUpperCase() || 'U'}
                 </span>
               </div>
               <div className="ml-3 min-w-0 flex-1">
-                <p className="text-sm font-medium text-secondary-900 truncate">
+                <p className="text-sm font-medium text-ink-950 dark:text-white truncate">
                   {user.firstName} {user.lastName}
                 </p>
-                <p className="text-xs text-secondary-500 truncate">
+                <p className="text-xs text-ink-500 dark:text-white/55 truncate tabular-nums">
                   {user.email}
                 </p>
               </div>
             </div>
           </div>
         )}
-      </div>
+      </aside>
     </>
   );
 };

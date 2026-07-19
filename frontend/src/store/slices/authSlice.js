@@ -1,14 +1,20 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import authAPI from '../../services/authAPI';
+import { ensureCsrf } from '../../services/api';
 import { toast } from 'react-hot-toast';
+
+// Cookie-based auth: the httpOnly JWT cookie is set by the server on login.
+// We keep an optional "legacy" localStorage copy for the migration window.
+const LEGACY_TOKEN_KEY = 'pfims.token.legacy';
 
 // Async thunks
 export const login = createAsyncThunk(
   'auth/login',
   async (credentials, { rejectWithValue }) => {
     try {
+      await ensureCsrf();
       const response = await authAPI.login(credentials);
-      localStorage.setItem('token', response.data.token);
+      if (response.data?.token) localStorage.setItem(LEGACY_TOKEN_KEY, response.data.token);
       toast.success('Login successful!');
       return response.data;
     } catch (error) {
@@ -60,7 +66,7 @@ export const verifyOtp = createAsyncThunk(
     try {
       const response = await authAPI.verifyOtp({ email, purpose, code });
       if (response.data?.token) {
-        localStorage.setItem('token', response.data.token);
+        localStorage.setItem(LEGACY_TOKEN_KEY, response.data.token);
       }
       toast.success(response.data?.message || 'OTP verified');
       return response.data;
@@ -77,11 +83,11 @@ export const logout = createAsyncThunk(
   async () => {
     try {
       await authAPI.logout();
-      localStorage.removeItem('token');
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
       toast.success('Logged out successfully');
       return {};
     } catch (error) {
-      localStorage.removeItem('token');
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
       return {};
     }
   }
@@ -91,15 +97,12 @@ export const checkAuth = createAsyncThunk(
   'auth/checkAuth',
   async (_, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        return rejectWithValue('No token found');
-      }
-      
+      // Cookie will be sent automatically; just hit /me to verify session.
+      await ensureCsrf();
       const response = await authAPI.getProfile();
       return response.data;
     } catch (error) {
-      localStorage.removeItem('token');
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
       return rejectWithValue('Authentication failed');
     }
   }
@@ -212,7 +215,7 @@ export const resendVerificationEmail = createAsyncThunk(
 
 const initialState = {
   user: null,
-  token: localStorage.getItem('token'),
+  token: localStorage.getItem(LEGACY_TOKEN_KEY) || null,
   isAuthenticated: false,
   isBootstrapping: true,
   isLoading: false,

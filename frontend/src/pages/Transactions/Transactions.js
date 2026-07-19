@@ -20,6 +20,7 @@ import TransactionForm from '../../components/Forms/TransactionForm';
 import { toast } from 'react-hot-toast';
 import ConfirmationDialog from '../../components/UI/ConfirmationDialog';
 import api from '../../services/api';
+import BrutalistScreen from '../../components/layout/BrutalistScreen';
 
 const Transactions = () => {
   const dispatch = useDispatch();
@@ -493,6 +494,7 @@ const Transactions = () => {
   const paginationEnd = Math.min(currentPage * itemsPerPage, totalItems);
 
   return (
+    <BrutalistScreen>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1081,6 +1083,7 @@ const Transactions = () => {
         isLoading={isDeletingTransaction}
       />
     </div>
+    </BrutalistScreen>
   );
 };
 

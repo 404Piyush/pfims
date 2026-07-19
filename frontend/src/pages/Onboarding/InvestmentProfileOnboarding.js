@@ -7,6 +7,8 @@ import { toast } from 'react-hot-toast';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { saveInvestmentProfile } from '../../store/slices/authSlice';
 import Modal from '../../components/UI/Modal';
+import AuroraScreen from '../../components/layout/AuroraScreen';
+import AuroraCard from '../../components/ui/AuroraCard';
 import api from '../../services/api';
 
 const steps = [
@@ -275,7 +277,7 @@ const InvestmentProfileOnboarding = ({ embedded = false, title = 'Investment que
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold text-secondary-900">{title}</h1>
+            <h1 className={clsx('text-2xl font-bold', embedded ? 'text-secondary-900' : 'text-white')}>{title}</h1>
             {String(title || '').toLowerCase().includes('mutual funds') ? (
               <button
                 type="button"
@@ -285,33 +287,33 @@ const InvestmentProfileOnboarding = ({ embedded = false, title = 'Investment que
                   'inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition',
                   result?.allocation && bucketLists.length
                     ? 'border-primary-500 bg-primary-50 text-primary-700 hover:bg-primary-100'
-                    : 'border-secondary-200 bg-secondary-50 text-secondary-400 cursor-not-allowed'
+                    : 'border-white/20 bg-white/10 text-white/60 cursor-not-allowed'
                 )}
               >
                 Calculator
               </button>
             ) : null}
           </div>
-          <p className="text-secondary-600 mt-1">{subtitle}</p>
+          <p className={clsx('mt-1', embedded ? 'text-secondary-600' : 'text-white/75')}>{subtitle}</p>
         </div>
         <div className="text-right">
-          <div className="text-xs text-secondary-500">Progress</div>
-          <div className="text-sm font-semibold text-secondary-900">{progress}%</div>
+          <div className={clsx('text-xs', embedded ? 'text-secondary-500' : 'text-white/60')}>Progress</div>
+          <div className={clsx('text-sm font-semibold tabular-nums', embedded ? 'text-secondary-900' : 'text-white')}>{progress}%</div>
         </div>
       </div>
-      <div className="mt-4 h-2 w-full rounded-full bg-secondary-200 overflow-hidden">
-        <div className="h-full bg-primary-600 rounded-full transition-all" style={{ width: `${progress}%` }} />
+      <div className={clsx('mt-4 h-2 w-full rounded-full overflow-hidden', embedded ? 'bg-secondary-200' : 'bg-white/15')}>
+        <div className="h-full bg-gradient-to-r from-brand-indigo via-brand-cyan to-brand-pink rounded-full transition-all" style={{ width: `${progress}%` }} />
       </div>
     </div>
   );
 
-  return (
-    <div className={clsx(embedded ? 'py-4' : 'min-h-screen bg-secondary-50 px-4 sm:px-6 lg:px-8 py-10')}>
+  const content = (
+    <div className={clsx(embedded ? 'py-4 text-ink-950' : 'px-4 sm:px-6 lg:px-8 py-10 text-white')}>
       <div className={clsx(embedded ? 'max-w-6xl mx-auto' : 'max-w-3xl mx-auto')}>
         {header}
 
         {result ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-secondary-200 p-6 sm:p-8">
+          <AuroraCard accent="cyan" className="p-6 sm:p-8 text-ink-950">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold text-secondary-900">
@@ -743,9 +745,9 @@ const InvestmentProfileOnboarding = ({ embedded = false, title = 'Investment que
                 Continue
               </button>
             </div>
-          </div>
+          </AuroraCard>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-secondary-200 overflow-hidden">
+          <AuroraCard accent="indigo" className="overflow-hidden text-ink-950">
             {currentStepIndex < steps.length ? (
               <div className="p-6 sm:p-8">
                 <div className="mb-6">
@@ -922,11 +924,13 @@ const InvestmentProfileOnboarding = ({ embedded = false, title = 'Investment que
                 </div>
               </div>
             )}
-          </div>
+          </AuroraCard>
         )}
       </div>
     </div>
   );
+
+  return embedded ? content : <AuroraScreen>{content}</AuroraScreen>;
 };
 
 export default InvestmentProfileOnboarding;
