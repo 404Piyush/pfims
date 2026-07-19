@@ -192,10 +192,35 @@
     100% { transform: translate3d(-2%, -1%, 0) scale(1.02) rotate(0deg); }
   }
   .animate-aurora-drift { animation: aurora-drift 14s ease-in-out infinite; }
-  @media (prefers-reduced-motion: reduce) {
-    .animate-aurora-drift { animation: none; }
+  /* Three different drift rhythms for the three halo blobs behind a card. */
+  @keyframes aurora-drift-a {
+    0%   { transform: translate3d(-3%, -2%, 0) scale(1.04); }
+    50%  { transform: translate3d(4%, 3%, 0)  scale(1.08); }
+    100% { transform: translate3d(-3%, -2%, 0) scale(1.04); }
   }
-  .reduce-motion .animate-aurora-drift { animation: none; }
+  @keyframes aurora-drift-b {
+    0%   { transform: translate3d(2%, 1%, 0) scale(1.06); }
+    50%  { transform: translate3d(-4%, -2%, 0) scale(1.02); }
+    100% { transform: translate3d(2%, 1%, 0) scale(1.06); }
+  }
+  @keyframes aurora-drift-c {
+    0%   { transform: translate3d(-1%, 2%, 0) scale(1.03); }
+    50%  { transform: translate3d(3%, -3%, 0) scale(1.07); }
+    100% { transform: translate3d(-1%, 2%, 0) scale(1.03); }
+  }
+  .animate-aurora-drift-a { animation: aurora-drift-a 16s ease-in-out infinite; }
+  .animate-aurora-drift-b { animation: aurora-drift-b 19s ease-in-out infinite; }
+  .animate-aurora-drift-c { animation: aurora-drift-c 22s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-aurora-drift,
+    .animate-aurora-drift-a,
+    .animate-aurora-drift-b,
+    .animate-aurora-drift-c { animation: none; }
+  }
+  .reduce-motion .animate-aurora-drift,
+  .reduce-motion .animate-aurora-drift-a,
+  .reduce-motion .animate-aurora-drift-b,
+  .reduce-motion .animate-aurora-drift-c { animation: none; }
 
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
