@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import BrutalistScreen from '../../components/layout/BrutalistScreen';
 import {
   CogIcon,
   BellIcon,
@@ -290,6 +291,7 @@ const Settings = () => {
   );
 
   return (
+    <BrutalistScreen>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -767,6 +769,7 @@ const Settings = () => {
         </div>
       </Modal>
     </div>
+    </BrutalistScreen>
   );
 };
 

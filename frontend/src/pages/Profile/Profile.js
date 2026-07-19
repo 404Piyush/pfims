@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import BrutalistScreen from '../../components/layout/BrutalistScreen';
 import {
   UserCircleIcon,
   PhoneIcon,
@@ -163,6 +164,7 @@ const Profile = () => {
   }
 
   return (
+    <BrutalistScreen>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -540,6 +542,7 @@ const Profile = () => {
         </div>
       </Modal>
     </div>
+    </BrutalistScreen>
   );
 };
 

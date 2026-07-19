@@ -3,7 +3,10 @@ const { exec } = require('child_process');
 
 // Generate JWT token for the user
 const userId = '68e4c8cb0ffdfa69f0364d2f'; // piyush@gmail.com user ID
-const JWT_SECRET = 'pfims_super_secret_jwt_key_for_development_only_2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-do-not-use-in-production';
+if (!process.env.JWT_SECRET) {
+  console.warn('JWT_SECRET env not set; using insecure dev fallback. Set JWT_SECRET to a 32+ char random string before running.');
+}
 const token = jwt.sign(
   { id: userId }, // Use 'id' instead of 'userId' to match auth middleware
   JWT_SECRET,

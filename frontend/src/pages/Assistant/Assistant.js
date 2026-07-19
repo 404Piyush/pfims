@@ -3,6 +3,7 @@ import chatAPI from '../../services/chatAPI';
 import ReactMarkdown from 'react-markdown';
 import { PlusCircleIcon, PencilSquareIcon, TrashIcon, ArrowPathIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
 import { useDispatch, useSelector } from 'react-redux';
+import BrutalistScreen from '../../components/layout/BrutalistScreen';
 import { fetchCategories } from '../../store/slices/categorySlice';
 import api from '../../services/api';
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, subMonths } from 'date-fns';
@@ -684,6 +685,7 @@ const Assistant = () => {
   };
 
   return (
+    <BrutalistScreen>
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -1107,6 +1109,7 @@ const Assistant = () => {
         </div>
       )}
     </div>
+    </BrutalistScreen>
   );
 };
 

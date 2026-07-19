@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { format, startOfMonth, endOfMonth, subMonths, parseISO, startOfYear, endOfYear } from 'date-fns';
+import BrutalistScreen from '../../components/layout/BrutalistScreen';
 import {
   ChartBarIcon,
   CurrencyDollarIcon,
@@ -331,6 +332,7 @@ const Reports = () => {
   }
 
   return (
+    <BrutalistScreen>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -700,6 +702,7 @@ const Reports = () => {
         </div>
       </div>
     </div>
+    </BrutalistScreen>
   );
 };
 

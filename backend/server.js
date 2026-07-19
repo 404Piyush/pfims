@@ -5,10 +5,12 @@ const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const mongoSanitize = require('express-mongo-sanitize');
 const cookieParser = require('cookie-parser');
+const crypto = require('crypto');
 const { doubleCsrfProtection, generateCsrfToken } = require('csrf-csrf');
 require('dotenv').config();
 const { connectDB, checkConnection } = require('./config/database');
 const { startReportScheduler } = require('./services/reportScheduler');
+const logger = require('./utils/logger');
 
 // --- Fail-fast on missing JWT_SECRET -----------------------------
 // The previous ".env.example" leaked a real Mailgun sandbox key and used a placeholder
@@ -46,6 +48,18 @@ ensureSecurityPreconditions();
 
 const app = express();
 app.set('trust proxy', 1); // respect X-Forwarded-For when behind a reverse proxy
+app.disable('x-powered-by');
+
+// Per-request nonce used to allow inline scripts in the *frontend*'s HTML shell.
+// Stays unset when nobody reads it, so /api/* never suffers CSP issues.
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) return next();
+  res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
+  next();
+});
+
+const IS_PROD = process.env.NODE_ENV === 'production';
+const CLIENT_ORIGIN = process.env.CLIENT_URL || 'http://localhost:3000';
 
 // --- Security middleware ----------------------------------------
 app.use(
@@ -54,15 +68,26 @@ app.use(
       useDefaults: true,
       directives: {
         defaultSrc: ["'self'"],
-        // Tailwind + inline styles need 'unsafe-inline' on dev; tighten in prod via build pipeline.
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
+        // In dev Tailwind + inline styles need 'unsafe-inline'; in prod we
+        // rely on a per-request nonce for any inline <script> CRA may emit.
+        styleSrc: IS_PROD ? ["'self'"] : ["'self'", "'unsafe-inline'"],
+        scriptSrc: IS_PROD
+          ? ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`]
+          : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
         imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'", process.env.CLIENT_URL || 'http://localhost:3000'],
+        connectSrc: ["'self'", CLIENT_ORIGIN, 'https://api.pwnedpasswords.com'],
         frameAncestors: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: IS_PROD ? [] : null,
       },
     },
-    hsts: { maxAge: 15552000, includeSubDomains: true, preload: false }, // 180 days
+    hsts: {
+      maxAge: 63072000, // 2 years
+      includeSubDomains: true,
+      preload: false,
+    },
     frameguard: { action: 'deny' },
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     crossOriginOpenerPolicy: { policy: 'same-origin' },
@@ -70,6 +95,7 @@ app.use(
     hidePoweredBy: true,
     noSniff: true,
     xssFilter: true,
+    permittedCrossDomainPolicies: { permittedPolicies: 'none' },
   })
 );
 
@@ -95,6 +121,47 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3001',
   process.env.CLIENT_URL,
 ].filter(Boolean);
+
+// --- Optional Sentry request handler -----------------------------
+if (process.env.SENTRY_DSN) {
+  try {
+    const Sentry = require('@sentry/node');
+    app.use(Sentry.Handlers.requestHandler());
+    app.use(Sentry.Handlers.tracingHandler());
+    app.use(
+      Sentry.Handlers.errorHandler({
+        shouldHandleError(error) {
+          return !error || (error.status || 500) >= 500;
+        },
+      })
+    );
+  } catch (e) {
+    logger.warn({ event: 'sentry_request_handler_init_failed', err: e.message }, 'sentry');
+  }
+}
+
+// --- Structured request logging ----------------------------------
+try {
+  const pinoHttp = require('pino-http');
+  app.use(
+    pinoHttp({
+      logger,
+      autoLogging: {
+        ignore: (req) => req.url === '/api/health' || req.url === '/favicon.ico',
+      },
+      serializers: {
+        req(req) {
+          return { method: req.method, url: req.url, id: req.id };
+        },
+        res(res) {
+          return { statusCode: res.statusCode };
+        },
+      },
+    })
+  );
+} catch (e) {
+  app.use((req, _res, next) => next());
+}
 
 const corsOptions = {
   origin(origin, cb) {

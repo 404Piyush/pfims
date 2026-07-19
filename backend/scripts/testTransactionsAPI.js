@@ -3,7 +3,10 @@ const { exec } = require('child_process');
 
 // Generate JWT token for piyush@gmail.com
 const payload = { id: '68e4c8cb0ffdfa69f0364d2f' };
-const JWT_SECRET = 'pfims_super_secret_jwt_key_for_development_only_2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-do-not-use-in-production';
+if (!process.env.JWT_SECRET) {
+  console.warn('JWT_SECRET env not set; using insecure dev fallback. Set JWT_SECRET to a 32+ char random string before running.');
+}
 const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
 
 console.log('Generated JWT token for piyush@gmail.com');

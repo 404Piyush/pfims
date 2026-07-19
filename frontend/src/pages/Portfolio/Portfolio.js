@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../services/api';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import BrutalistScreen from '../../components/layout/BrutalistScreen';
 
 const toNumber = (val) => {
   if (val === null || val === undefined || val === '') return null;
@@ -316,6 +317,7 @@ const Portfolio = () => {
   }, [status.connected, selectedAccountId, editingKeys, refreshPortfolio]);
 
   return (
+    <BrutalistScreen>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -944,6 +946,7 @@ const Portfolio = () => {
         </div>
       ) : null}
     </div>
+    </BrutalistScreen>
   );
 };
 

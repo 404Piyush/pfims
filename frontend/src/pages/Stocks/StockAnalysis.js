@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../services/api';
 import { InlineSpinner } from '../../components/UI/LoadingSpinner';
+import BrutalistScreen from '../../components/layout/BrutalistScreen';
 import {
   Line,
   LineChart,
@@ -190,6 +191,7 @@ const StockAnalysis = () => {
   };
 
   return (
+    <BrutalistScreen>
     <div className="space-y-6">
       <div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-6">
         <h1 className="text-xl font-semibold text-secondary-900">Stock Technical Analysis</h1>
@@ -424,6 +426,7 @@ const StockAnalysis = () => {
         </div>
       ) : null}
     </div>
+    </BrutalistScreen>
   );
 };
 

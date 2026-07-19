@@ -5,13 +5,53 @@ const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const Category = require('../models/Category');
+const RefreshToken = require('../models/RefreshToken');
 const { auth, sensitiveOperationLimit } = require('../middleware/auth');
 const emailService = require('../utils/emailService');
+const { rejectedByHIBP } = require('../utils/hibp');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
 const COOKIE_NAME = 'pfims_token';
+const REFRESH_COOKIE_NAME = 'pfims_refresh';
 const PASSWORD_MIN_LENGTH = 8;
+const ACCESS_TTL_SECONDS = parseInt(process.env.ACCESS_TTL_SECONDS || '900', 10); // 15 min
+const REFRESH_TTL_SECONDS = parseInt(process.env.REFRESH_TTL_SECONDS || String(30 * 24 * 60 * 60), 10); // 30d
+const SAME_SITE = process.env.COOKIE_SAMESITE || 'lax';
+
+// Issue an access token + refresh token for the given user, set the cookies,
+// and return the access token. Returns the refresh token so callers can also
+// store it in the response body if they need to.
+async function issueSession(user, { req, res }) {
+  const accessToken = generateToken(user._id);
+  const refresh = await RefreshToken.issue({
+    user,
+    userAgent: req?.headers?.['user-agent'] || '',
+    ip: req?.ip,
+    ttlSeconds: REFRESH_TTL_SECONDS,
+  });
+  await refresh.doc.save();
+
+  setAuthCookie(res, accessToken);
+  setRefreshCookie(res, refresh.token);
+
+  return { accessToken, refreshToken: refresh.token };
+}
+
+function setRefreshCookie(res, token) {
+  res.cookie(REFRESH_COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: SAME_SITE,
+    secure: process.env.NODE_ENV === 'production',
+    path: '/api/auth', // refresh only travels to /api/auth/* — limits CSRF surface
+    maxAge: REFRESH_TTL_SECONDS * 1000,
+  });
+}
+
+function clearRefreshCookie(res) {
+  res.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/auth' });
+}
 
 // --- Token helpers -----------------------------------------------
 const generateToken = (userId) => {
@@ -114,6 +154,15 @@ router.post(
         return res.status(400).json({ message: 'User already exists with this email' });
       }
 
+      // Reject passwords that appear in known breach corpora.
+      const breach = await rejectedByHIBP(password);
+      if (breach) {
+        return res.status(400).json({
+          message: `This password appears in a known data breach (~${breach.count.toLocaleString()} occurrences). Please choose a different one.`,
+          code: 'PASSWORD_IN_BREACH',
+        });
+      }
+
       const verificationToken = crypto.randomBytes(32).toString('hex');
       const hashedToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
 
@@ -152,12 +201,12 @@ router.post(
         console.error('Registration OTP send error:', e?.message || e);
       }
 
-      const token = generateToken(user._id);
-      setAuthCookie(res, token);
+      const { accessToken, refreshToken } = await issueSession(user, { req, res });
 
       res.status(201).json({
         message: 'User registered successfully. Please check your email to verify your account.',
-        token, // still returned during migration; SPA should switch to the cookie
+        token: accessToken,
+        refreshToken,
         user: {
           id: user._id,
           firstName: user.firstName,
@@ -202,15 +251,14 @@ router.post(
       const isMatch = await user.comparePassword(password);
       if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
 
-      const token = generateToken(user._id);
+      const { accessToken, refreshToken } = await issueSession(user, { req, res });
       user.lastLogin = new Date();
       await user.save();
 
-      setAuthCookie(res, token);
-
       res.json({
         message: 'Login successful',
-        token,
+        token: accessToken,
+        refreshToken,
         user: {
           id: user._id,
           firstName: user.firstName,
@@ -233,9 +281,74 @@ router.post(
 );
 
 // @route   POST /api/auth/logout
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+  const refreshToken =
+    req.cookies && req.cookies[REFRESH_COOKIE_NAME]
+      ? req.cookies[REFRESH_COOKIE_NAME]
+      : req.body && req.body.refreshToken;
+  try {
+    await RefreshToken.revoke(refreshToken, 'logout');
+  } catch (e) {
+    logger.warn({ event: 'logout_revocation_failed', err: e.message }, 'refresh-revoke');
+  }
   clearAuthCookie(res);
+  clearRefreshCookie(res);
   res.json({ message: 'Logged out' });
+});
+
+// @route   POST /api/auth/refresh
+// @desc    Rotate the refresh token and mint a new short-lived access token.
+//          Cookie-only path (refresh token never leaves the browser on /api/auth/*)
+//          Body fallback is supported for first-party migration only.
+router.post('/refresh', sensitiveOperationLimit(60 * 1000, 10), async (req, res) => {
+  try {
+    const presented =
+      (req.cookies && req.cookies[REFRESH_COOKIE_NAME]) ||
+      (req.body && req.body.refreshToken);
+    if (!presented) return res.status(401).json({ message: 'Missing refresh token' });
+
+    const out = await RefreshToken.rotate({
+      presentedToken: presented,
+      userAgent: req.headers['user-agent'] || '',
+      ip: req.ip,
+      ttlSeconds: REFRESH_TTL_SECONDS,
+    });
+
+    if (out.error === 'reuse_detected') {
+      logger.warn({ event: 'refresh_reuse', ip: req.ip }, 'refresh-reuse');
+      clearAuthCookie(res);
+      clearRefreshCookie(res);
+      return res.status(401).json({
+        message: 'Refresh token reuse detected — please log in again.',
+        code: 'REFRESH_REUSE',
+      });
+    }
+    if (out.error === 'expired') {
+      return res.status(401).json({ message: 'Refresh token expired' });
+    }
+    if (out.error === 'unknown_token') {
+      return res.status(401).json({ message: 'Invalid refresh token' });
+    }
+
+    const user = await User.findById(out.doc.user);
+    if (!user || !user.isActive) {
+      await RefreshToken.revoke(out.token, 'admin');
+      return res.status(401).json({ message: 'User not available' });
+    }
+
+    const accessToken = generateToken(user._id);
+    setAuthCookie(res, accessToken);
+    setRefreshCookie(res, out.token);
+
+    res.json({
+      message: 'Token refreshed',
+      token: accessToken,
+      refreshToken: out.token,
+    });
+  } catch (error) {
+    logger.error({ event: 'refresh_error', err: error.message }, 'refresh-failed');
+    res.status(500).json({ message: 'Server error during refresh' });
+  }
 });
 
 // @route   POST /api/auth/otp/send
@@ -351,13 +464,13 @@ router.post(
       user.otpResendCount = 0;
 
       if (purpose === 'login') {
-        const token = generateToken(user._id);
+        const { accessToken, refreshToken } = await issueSession(user, { req, res });
         user.lastLogin = new Date();
         await user.save();
-        setAuthCookie(res, token);
         return res.json({
           message: 'Login successful',
-          token,
+          token: accessToken,
+          refreshToken,
           user: {
             id: user._id,
             firstName: user.firstName,
@@ -375,13 +488,13 @@ router.post(
         user.isEmailVerified = true;
         user.emailVerificationToken = undefined;
         user.emailVerificationExpires = undefined;
+        const { accessToken, refreshToken } = await issueSession(user, { req, res });
         user.lastLogin = new Date();
         await user.save();
-        const token = generateToken(user._id);
-        setAuthCookie(res, token);
         return res.json({
           message: 'Email verified successfully',
-          token,
+          token: accessToken,
+          refreshToken,
           user: {
             id: user._id,
             firstName: user.firstName,
@@ -427,6 +540,14 @@ router.post(
       }
 
       const { email, code, newPassword } = req.body;
+
+      const breach = await rejectedByHIBP(newPassword);
+      if (breach) {
+        return res.status(400).json({
+          message: `This password appears in a known data breach (~${breach.count.toLocaleString()} occurrences). Please choose a different one.`,
+          code: 'PASSWORD_IN_BREACH',
+        });
+      }
       const user = await User.findOne({ email });
       if (!user) return res.status(400).json({ message: 'Invalid request' });
 
@@ -542,6 +663,15 @@ router.post(
       }
 
       const { token, password } = req.body;
+
+      const breach = await rejectedByHIBP(password);
+      if (breach) {
+        return res.status(400).json({
+          message: `This password appears in a known data breach (~${breach.count.toLocaleString()} occurrences). Please choose a different one.`,
+          code: 'PASSWORD_IN_BREACH',
+        });
+      }
+
       const user = await User.findOne({
         passwordResetToken: crypto.createHash('sha256').update(String(token)).digest('hex'),
         passwordResetExpires: { $gt: Date.now() },
@@ -550,6 +680,12 @@ router.post(
       if (!user) return res.status(400).json({ message: 'Invalid or expired reset token' });
 
       user.password = password;
+      // Invalidate every refresh token for this user after a password reset.
+      try {
+        await RefreshToken.revokeAllForUser(user._id, 'password_change');
+      } catch (e) {
+        // Non-fatal — log only.
+      }
       user.passwordResetToken = undefined;
       user.passwordResetExpires = undefined;
       await user.save();
@@ -579,12 +715,26 @@ router.post(
       }
 
       const { currentPassword, newPassword } = req.body;
+
+      const breach = await rejectedByHIBP(newPassword);
+      if (breach) {
+        return res.status(400).json({
+          message: `This password appears in a known data breach (~${breach.count.toLocaleString()} occurrences). Please choose a different one.`,
+          code: 'PASSWORD_IN_BREACH',
+        });
+      }
+
       const user = await User.findById(req.user._id).select('+password');
       const isMatch = await user.comparePassword(currentPassword);
       if (!isMatch) return res.status(400).json({ message: 'Current password is incorrect' });
 
       user.password = newPassword;
       await user.save();
+      // Other sessions become invalid; keep this one logged in only if the
+      // caller passes the new (rotation) refresh token.
+      try {
+        await RefreshToken.revokeAllForUser(user._id, 'password_change');
+      } catch (e) {}
 
       res.json({ message: 'Password changed successfully' });
     } catch (error) {
@@ -616,14 +766,14 @@ router.post(
       user.isEmailVerified = true;
       user.emailVerificationToken = undefined;
       user.emailVerificationExpires = undefined;
-      const authToken = generateToken(user._id);
+      const { accessToken, refreshToken } = await issueSession(user, { req, res });
       user.lastLogin = new Date();
       await user.save();
-      setAuthCookie(res, authToken);
 
       res.json({
         message: 'Email verified successfully',
-        token: authToken,
+        token: accessToken,
+        refreshToken,
         user: {
           id: user._id,
           firstName: user.firstName,
