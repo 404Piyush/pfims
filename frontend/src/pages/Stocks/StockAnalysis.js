@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../services/api';
-import { InlineSpinner } from '../../components/UI/LoadingSpinner';
+import { InlineSpinner } from '../../components/ui/LoadingSpinner';
 import BrutalistScreen from '../../components/layout/BrutalistScreen';
 import {
   Line,

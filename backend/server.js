@@ -6,7 +6,7 @@ const compression = require('compression');
 const mongoSanitize = require('express-mongo-sanitize');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
-const { doubleCsrfProtection, generateCsrfToken } = require('csrf-csrf');
+const { doubleCsrf } = require('csrf-csrf');
 require('dotenv').config();
 const { connectDB, checkConnection } = require('./config/database');
 const { startReportScheduler } = require('./services/reportScheduler');
@@ -188,43 +188,55 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // --- CSRF (double-submit cookie) --------------------------------
-// Frontend reads the CSRF token from a non-httpOnly meta tag (set by /api/csrf)
+// Frontend reads the CSRF token from a non-httpOnly cookie (set by /api/csrf)
 // and sends it back on every state-changing request as `X-CSRF-Token`.
-const csrfConfig = {
-  getSecret: () => process.env.CSRF_SECRET || process.env.JWT_SECRET,
-  cookieName: 'pfims_csrf',
-  cookieOptions: {
-    httpOnly: false,        // readable by JS so the SPA can mirror the header
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-  },
-  size: 64,
-  ignoreMethods: ['GET', 'HEAD', 'OPTIONS'],
-};
-const { generateCsrfToken: genCsrf, doubleCsrfProtection: csrfProtect } = (() => {
-  try {
-    return require('csrf-csrf');
-  } catch (_) {
-    // Fallback: no-op stub. Real CSRF will activate once `csrf-csrf` is installed.
-    return {
-      generateCsrfToken: () => (req, _res, next) => next(),
-      doubleCsrfProtection: (_req, _res, next) => next(),
-    };
-  }
-})();
-app.use(genCsrf);
+let csrfGenerate, csrfProtect, csrfInvalidError;
+try {
+  const csrfUtils = doubleCsrf({
+    getSecret: () => process.env.CSRF_SECRET || process.env.JWT_SECRET,
+    cookieName: 'pfims_csrf',
+    cookieOptions: {
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+    },
+    size: 64,
+    ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
+  });
+  csrfGenerate = csrfUtils.generateToken;        // (req, res) => token string; sets cookie
+  csrfProtect = csrfUtils.doubleCsrfProtection;  // (req, res, next) middleware
+  csrfInvalidError = csrfUtils.invalidCsrfTokenError;
+} catch (err) {
+  // Fallback no-op in case the helper fails at boot — endpoints stay reachable.
+  logger?.warn?.({ err: err?.message || String(err) }, 'csrf-csrf not initialised, CSRF protection disabled');
+  csrfGenerate = () => '';
+  csrfProtect = (_req, _res, next) => next();
+  csrfInvalidError = { code: 'EBADCSRFTOKEN' };
+}
+
+// CSRF protection for state-changing /api/* requests only. Reads cookie
+// `pfims_csrf` and validates the `X-CSRF-Token` header against it.
 app.use((req, res, next) => {
-  // Only protect state-changing routes under /api
-  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS' || !req.path.startsWith('/api')) {
+  if (
+    req.method === 'GET' ||
+    req.method === 'HEAD' ||
+    req.method === 'OPTIONS' ||
+    !req.path.startsWith('/api')
+  ) {
     return next();
   }
   return csrfProtect(req, res, next);
 });
 
-// CSRF token endpoint — SPA calls this on boot
+// CSRF token endpoint — SPA calls this on boot.
 app.get('/api/csrf', (req, res) => {
-  res.json({ csrfToken: req.csrfToken ? req.csrfToken() : null });
+  try {
+    const token = csrfGenerate(req, res);
+    if (!token) return res.status(500).json({ message: 'CSRF token generation failed' });
+    res.json({ csrfToken: token });
+  } catch (err) {
+    res.status(500).json({ message: 'CSRF token generation failed' });
+  }
 });
 
 // --- Rate limiting (per IP) -------------------------------------

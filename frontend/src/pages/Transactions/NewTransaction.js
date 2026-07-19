@@ -6,7 +6,7 @@ import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { createTransaction } from '../../store/slices/transactionSlice';
 import { fetchCategories } from '../../store/slices/categorySlice';
 import TransactionForm from '../../components/Forms/TransactionForm';
-import LoadingSpinner from '../../components/UI/LoadingSpinner';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 
 const NewTransaction = () => {
   const navigate = useNavigate();

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import LoadingSpinner from '../UI/LoadingSpinner';
+import LoadingSpinner from '../ui/LoadingSpinner';
 
 const ProtectedRoute = ({ children, requireEmailVerification = false }) => {
   const { isAuthenticated, isBootstrapping, user } = useSelector((state) => state.auth);

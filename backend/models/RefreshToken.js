@@ -81,7 +81,8 @@ RefreshTokenSchema.statics.rotate = async function ({ presentedToken, userAgent,
     return { error: 'expired' };
   }
 
-  const issued = await this.constructor.issue({ user: existing.user, userAgent, ip, ttlSeconds });
+  const Model = this.constructor && this.constructor.findOne ? this.constructor : null;
+  const issued = await (Model ? Model.issue({ user: existing.user, userAgent, ip, ttlSeconds }) : RefreshToken.issue({ user: existing.user, userAgent, ip, ttlSeconds }));
   await issued.doc.save();
 
   existing.revokedAt = new Date();
@@ -108,4 +109,7 @@ RefreshTokenSchema.statics.revokeAllForUser = async function (userId, reason = '
   );
 };
 
-module.exports = mongoose.model('RefreshToken', RefreshTokenSchema);
+const RefreshToken = mongoose.model('RefreshToken', RefreshTokenSchema);
+
+module.exports = RefreshToken;
+module.exports.RefreshToken = RefreshToken;

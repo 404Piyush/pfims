@@ -14,11 +14,11 @@ import {
 } from '@heroicons/react/24/outline';
 import { fetchTransactions, deleteTransaction, createTransaction, updateTransaction } from '../../store/slices/transactionSlice';
 import { fetchCategories } from '../../store/slices/categorySlice';
-import LoadingSpinner, { LoadingOverlay } from '../../components/UI/LoadingSpinner';
-import Modal from '../../components/UI/Modal';
+import LoadingSpinner, { LoadingOverlay } from '../../components/ui/LoadingSpinner';
+import Modal from '../../components/ui/Modal';
 import TransactionForm from '../../components/Forms/TransactionForm';
 import { toast } from 'react-hot-toast';
-import ConfirmationDialog from '../../components/UI/ConfirmationDialog';
+import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import api from '../../services/api';
 import BrutalistScreen from '../../components/layout/BrutalistScreen';
 

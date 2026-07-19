@@ -12,10 +12,10 @@ import {
   ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
 import { fetchCategories, deleteCategory, createCategory, updateCategory } from '../../store/slices/categorySlice';
-import LoadingSpinner, { LoadingOverlay } from '../../components/UI/LoadingSpinner';
-import Modal from '../../components/UI/Modal';
+import LoadingSpinner, { LoadingOverlay } from '../../components/ui/LoadingSpinner';
+import Modal from '../../components/ui/Modal';
 import CategoryForm from '../../components/Forms/CategoryForm';
-import ConfirmationDialog from '../../components/UI/ConfirmationDialog';
+import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import BrutalistScreen from '../../components/layout/BrutalistScreen';
 import { toast } from 'react-hot-toast';
 import api from '../../services/api';

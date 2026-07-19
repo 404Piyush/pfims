@@ -9,7 +9,7 @@ export default function MotionToggle() {
     localStorage.setItem(KEY, next ? 'reduced' : 'normal');
     document.documentElement.classList.toggle('reduce-motion', next);
     // Force re-render via storage event from a different window; fall back to reload.
-    location.reload();
+    window.location.reload();
   };
   return (
     <button

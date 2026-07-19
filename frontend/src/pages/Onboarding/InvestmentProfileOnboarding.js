@@ -6,7 +6,7 @@ import { clsx } from 'clsx';
 import { toast } from 'react-hot-toast';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { saveInvestmentProfile } from '../../store/slices/authSlice';
-import Modal from '../../components/UI/Modal';
+import Modal from '../../components/ui/Modal';
 import AuroraScreen from '../../components/layout/AuroraScreen';
 import AuroraCard from '../../components/ui/AuroraCard';
 import api from '../../services/api';

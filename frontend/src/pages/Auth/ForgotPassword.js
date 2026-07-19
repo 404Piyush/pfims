@@ -7,8 +7,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { forgotPassword } from '../../store/slices/authSlice';
 import { ArrowLeftIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import AuroraScreen from '../../components/layout/AuroraScreen';
-import AuroraCard from '../../components/ui/AuroraCard';
-import LoadingSpinner from '../../components/UI/LoadingSpinner';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 
 const schema = yup.object({
   email: yup
@@ -36,125 +35,114 @@ const ForgotPassword = () => {
       await dispatch(forgotPassword(data.email)).unwrap();
       setIsSubmitted(true);
     } catch (error) {
-      // Error is handled by the slice
+      // Error handled by slice
     }
   };
 
   if (isSubmitted) {
     return (
       <AuroraScreen>
-      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <AuroraCard accent="cyan" className="p-8">
-            <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-success-100 mb-6">
-                <EnvelopeIcon className="h-8 w-8 text-success-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-secondary-900 mb-2">
-                Check your email
-              </h2>
-              <p className="text-secondary-600 mb-6">
-                We've sent a password reset link to{' '}
-                <span className="font-medium text-secondary-900">
-                  {getValues('email')}
-                </span>
-              </p>
-              <div className="space-y-4">
-                <Link
-                  to="/login"
-                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
-                >
-                  Back to login
-                </Link>
-                <button
-                  onClick={() => setIsSubmitted(false)}
-                  className="w-full flex justify-center py-3 px-4 border border-secondary-300 rounded-lg shadow-sm text-sm font-medium text-secondary-700 bg-white hover:bg-secondary-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
-                >
-                  Try different email
-                </button>
+        <div className="aurora-shell min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-md w-full">
+            <div className="relative rounded-3xl border border-white/10 bg-black/40 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_20px_80px_-20px_rgba(0,0,0,0.7)] p-8">
+              <div className="text-center">
+                <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400/30 to-brand-cyan/30 ring-1 ring-emerald-300/40">
+                  <EnvelopeIcon className="h-8 w-8 text-emerald-200" />
+                </div>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-white via-emerald-200 to-brand-cyan bg-clip-text text-transparent mb-2">
+                  Check your email
+                </h2>
+                <p className="text-white/70 mb-6 leading-relaxed">
+                  We've sent a password reset link to{' '}
+                  <span className="font-medium text-white">{getValues('email')}</span>.<br />
+                  The link expires in 1 hour.
+                </p>
+                <div className="space-y-3">
+                  <Link to="/login" className="btn-primary block w-full">
+                    Back to login
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setIsSubmitted(false)}
+                    className="block w-full rounded-xl border border-white/15 bg-white/5 py-3 px-4 text-sm font-medium text-white/85 hover:bg-white/10 transition-colors"
+                  >
+                    Try a different email
+                  </button>
+                </div>
               </div>
             </div>
-          </AuroraCard>
+          </div>
         </div>
-      </div>
       </AuroraScreen>
     );
   }
 
   return (
     <AuroraScreen>
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <AuroraCard accent="cyan" className="p-8">
-          <div className="text-center">
+      <div className="aurora-shell min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full">
+          <div className="relative rounded-3xl border border-white/10 bg-black/40 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_20px_80px_-20px_rgba(0,0,0,0.7)] p-8">
             <Link
               to="/login"
-              className="inline-flex items-center text-sm text-secondary-600 hover:text-secondary-900 mb-6 transition-colors"
+              className="inline-flex items-center text-sm text-white/70 hover:text-white mb-6 transition-colors"
             >
               <ArrowLeftIcon className="h-4 w-4 mr-2" />
               Back to login
             </Link>
-            <h2 className="text-3xl font-bold text-secondary-900 mb-2">
+
+            <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-cyan to-brand-pink shadow-[0_18px_60px_-12px_rgba(6,182,212,0.6)]">
+              <EnvelopeIcon className="h-7 w-7 text-white" />
+            </div>
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-white via-brand-cyan to-white bg-clip-text text-transparent mb-2">
               Forgot your password?
             </h2>
-            <p className="text-secondary-600 mb-8">
-              No worries! Enter your email address and we'll send you a link to reset your password.
+            <p className="text-white/70 mb-8 leading-relaxed">
+              No worries — enter your email and we'll send you a link to reset your password.
             </p>
-          </div>
 
-          <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-secondary-700 mb-2">
-                Email address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <EnvelopeIcon className="h-5 w-5 text-secondary-400" />
+            <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+              <div>
+                <label htmlFor="email" className="form-label">
+                  Email address
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <EnvelopeIcon className="h-5 w-5 text-white/40" />
+                  </div>
+                  <input
+                    id="email"
+                    {...register('email')}
+                    type="email"
+                    autoComplete="email"
+                    className={`input pl-10 pr-3 ${errors.email ? 'input-error' : ''}`}
+                    placeholder="you@example.com"
+                  />
                 </div>
-                <input
-                  {...register('email')}
-                  type="email"
-                  autoComplete="email"
-                  className={`block w-full pl-10 pr-3 py-3 border rounded-lg shadow-sm placeholder-secondary-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 sm:text-sm transition-colors ${
-                    errors.email
-                      ? 'border-danger-300 focus:ring-danger-500 focus:border-danger-500'
-                      : 'border-secondary-300'
-                  }`}
-                  placeholder="Enter your email"
-                />
+                {errors.email && (
+                  <p className="form-error">{errors.email.message}</p>
+                )}
               </div>
-              {errors.email && (
-                <p className="mt-2 text-sm text-danger-600">{errors.email.message}</p>
-              )}
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {loading ? (
-                <LoadingSpinner size="sm" color="white" />
-              ) : (
-                'Send reset link'
-              )}
-            </button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-sm text-secondary-600">
-              Remember your password?{' '}
-              <Link
-                to="/login"
-                className="font-medium text-primary-600 hover:text-primary-500 transition-colors"
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary w-full"
               >
-                Sign in
-              </Link>
-            </p>
+                {loading ? <LoadingSpinner size="sm" /> : 'Send reset link'}
+              </button>
+            </form>
+
+            <div className="mt-6 text-center">
+              <p className="text-sm text-white/70">
+                Remember your password?{' '}
+                <Link to="/login" className="font-medium text-brand-cyan hover:text-white transition-colors">
+                  Sign in
+                </Link>
+              </p>
+            </div>
           </div>
-        </AuroraCard>
+        </div>
       </div>
-    </div>
     </AuroraScreen>
   );
 };

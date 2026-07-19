@@ -12,7 +12,7 @@ import {
   EyeIcon,
 } from '@heroicons/react/24/outline';
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import LoadingSpinner from '../../components/UI/LoadingSpinner';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import AuroraScreen from '../../components/layout/AuroraScreen';
 import NumberStat from '../../components/ui/NumberStat';
 import api from '../../services/api';

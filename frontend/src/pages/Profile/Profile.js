@@ -15,8 +15,8 @@ import {
   EyeSlashIcon,
 } from '@heroicons/react/24/outline';
 import { updateProfile, changePassword } from '../../store/slices/authSlice';
-import LoadingSpinner from '../../components/UI/LoadingSpinner';
-import Modal from '../../components/UI/Modal';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import Modal from '../../components/ui/Modal';
 
 const Profile = () => {
   const dispatch = useDispatch();

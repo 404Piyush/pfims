@@ -18,8 +18,8 @@ import {
   TrashIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
-import LoadingSpinner from '../../components/UI/LoadingSpinner';
-import Modal from '../../components/UI/Modal';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import Modal from '../../components/ui/Modal';
 import authAPI from '../../services/authAPI';
 import api from '../../services/api';
 

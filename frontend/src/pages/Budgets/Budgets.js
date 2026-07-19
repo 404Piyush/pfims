@@ -19,10 +19,10 @@ import {
 import { fetchBudgets, deleteBudget, createBudget, updateBudget, getBudgetAlerts, markAlertAsRead, clearAlerts } from '../../store/slices/budgetSlice';
 import { fetchCategories } from '../../store/slices/categorySlice';
 import { fetchTransactions } from '../../store/slices/transactionSlice';
-import LoadingSpinner, { LoadingOverlay } from '../../components/UI/LoadingSpinner';
-import Modal from '../../components/UI/Modal';
+import LoadingSpinner, { LoadingOverlay } from '../../components/ui/LoadingSpinner';
+import Modal from '../../components/ui/Modal';
 import BudgetForm from '../../components/Forms/BudgetForm';
-import ConfirmationDialog from '../../components/UI/ConfirmationDialog';
+import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import BrutalistScreen from '../../components/layout/BrutalistScreen';
 import { toast } from 'react-hot-toast';
 

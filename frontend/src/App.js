@@ -4,9 +4,9 @@ import { useDispatch, useSelector } from 'react-redux';
 import { checkAuth } from './store/slices/authSlice';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import PublicRoute from './components/Auth/PublicRoute';
-import Layout from './components/Layout/Layout';
-import LoadingSpinner from './components/UI/LoadingSpinner';
-import Toast from './components/UI/Toast';
+import Layout from './components/layout/Layout';
+import LoadingSpinner from './components/ui/LoadingSpinner';
+import Toast from './components/ui/Toast';
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 import { Toaster } from 'react-hot-toast';
 

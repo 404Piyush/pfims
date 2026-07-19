@@ -12,7 +12,7 @@ import {
   EnvelopeIcon,
 } from '@heroicons/react/24/outline';
 import { fetchCategories } from '../../store/slices/categorySlice';
-import LoadingSpinner from '../../components/UI/LoadingSpinner';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import api from '../../services/api';
 import { toast } from 'react-hot-toast';
 

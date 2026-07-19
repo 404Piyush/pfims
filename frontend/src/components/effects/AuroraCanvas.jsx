@@ -20,6 +20,8 @@ void main() {
 
 // Domain-warped fractal noise, blended in 3 colour stops that drift slowly.
 // `uMouse` parallax influences the noise translation for a subtle parallax.
+// Soft "ribbon" tint across the screen — heavy base + low-frequency warp so
+// colour fills the viewport instead of concentrating in a few noise peaks.
 const FRAGMENT = /* glsl */ `
 precision highp float;
 varying vec2 vUv;
@@ -59,22 +61,32 @@ float fbm(vec2 p) {
 
 void main() {
   vec2 uv = (gl_FragCoord.xy / uResolution.xy);
-  vec2 m  = uMouse * 0.18;
+  // Aspect-correct uv so noise doesn't stretch horizontally on wide screens.
+  vec2 p = vec2(uv.x * (uResolution.x / uResolution.y), uv.y);
+  vec2 m  = uMouse * 0.12;
 
-  float t = uTime * 0.06;
-  vec2 q = vec2(fbm(uv * 2.0 + t + m),
-                fbm(uv * 2.0 + vec2(1.7, 9.2) - t * 0.7 + m));
-  float n = fbm(uv * 2.5 + q * 2.5 + t * 0.5);
+  float t = uTime * 0.05;
 
-  // Three colour layers, weighted by different fbm samples.
-  vec3 col = mix(uColorA, uColorB, smoothstep(0.0, 1.0, n));
-  col      = mix(col,      uColorC, smoothstep(0.4, 1.0, fbm(uv * 3.0 - q * 1.5 + t)));
+  // Low-frequency base wash — keeps every pixel in some colour, never pure black.
+  float base = fbm(p * 1.2 + t * 0.3 + m);
 
-  // Vignette + grain so it doesn't look "too digital"
-  float vig = smoothstep(1.2, 0.35, length(uv - 0.5));
-  col *= vig;
+  // Domain-warped accent noise — sharp, glowy highlights.
+  vec2 q = vec2(fbm(p * 2.0 + t + m),
+                fbm(p * 2.0 + vec2(1.7, 9.2) - t * 0.7 + m));
+  float n = fbm(p * 2.4 + q * 2.0 + t * 0.5);
 
-  // Subtle film grain (very cheap).
+  // Three colour layers mixed on independent noise samples — every stop gets screen real-estate.
+  vec3 col = mix(uColorA, uColorB, smoothstep(0.2, 0.8, base));
+  col      = mix(col,    uColorC, smoothstep(0.35, 0.85, n));
+  // Boost the warped highlight so it's a visible glow, not a tint.
+  col += uColorB * smoothstep(0.55, 1.0, n) * 0.55;
+
+  // Mild vignette so the corners breathe but never crush to black.
+  vec2 vc = uv - 0.5;
+  float vig = smoothstep(1.05, 0.20, length(vc));
+  col *= mix(0.55, 1.0, vig); // floor at 55% so no pixel is below mid-tone
+
+  // Subtle film grain.
   float g = (hash(gl_FragCoord.xy * 0.5 + uTime) - 0.5) * 0.025;
   col += g;
 
@@ -92,7 +104,7 @@ const hexToRGB = (hex) => {
 
 export default function AuroraCanvas({
   colors = { a: '#6366f1', b: '#06b6d4', c: '#ec4899' },
-  intensity = 0.65,
+  intensity = 1.15,
   className = '',
   style = {},
 }) {

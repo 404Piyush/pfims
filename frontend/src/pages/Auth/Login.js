@@ -6,11 +6,10 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { requestOtp, verifyOtp, resendVerificationEmail } from '../../store/slices/authSlice';
-import { InlineSpinner } from '../../components/UI/LoadingSpinner';
+import { InlineSpinner } from '../../components/ui/LoadingSpinner';
 import AuroraScreen from '../../components/layout/AuroraScreen';
 import AuroraCard from '../../components/ui/AuroraCard';
 
-// Validation schema
 const loginSchema = yup.object({
   email: yup
     .string()
@@ -18,7 +17,7 @@ const loginSchema = yup.object({
     .required('Enter your email address'),
   password: yup
     .string()
-    .min(6, 'Password must be at least 6 characters')
+    .min(8, 'Password must be at least 8 characters')
     .required('Enter your password'),
 });
 
@@ -39,9 +38,7 @@ const Login = () => {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm({
-    resolver: yupResolver(loginSchema),
-  });
+  } = useForm({ resolver: yupResolver(loginSchema) });
   const [emailValue, setEmailValue] = useState('');
   const emailRegister = register('email', {
     onChange: (e) => setEmailValue(e.target.value),
@@ -55,34 +52,34 @@ const Login = () => {
       setOtpCode('');
       setStep('otp');
       setResendCooldown(60);
-      await dispatch(requestOtp({ email: data.email, password: data.password, purpose: 'login' })).unwrap();
-    } catch (error) {
+      await dispatch(
+        requestOtp({ email: data.email, password: data.password, purpose: 'login' })
+      ).unwrap();
+    } catch (err) {
       setStep('credentials');
       setResendCooldown(0);
-      if (error?.requiresEmailVerification) {
-        setRequiresVerification(true);
-      }
+      if (err?.requiresEmailVerification) setRequiresVerification(true);
     }
   };
 
   const handleVerifyOtp = async () => {
     try {
-      await dispatch(verifyOtp({ email: emailValue, purpose: 'login', code: otpCode })).unwrap();
+      await dispatch(
+        verifyOtp({ email: emailValue, purpose: 'login', code: otpCode })
+      ).unwrap();
       const from = location.state?.from?.pathname || '/';
       navigate(from, { replace: true });
-    } catch (e) {
-      // slice handles toast
-    }
+    } catch (_) {}
   };
 
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || !emailValue || !loginPassword) return;
     try {
-      await dispatch(requestOtp({ email: emailValue, password: loginPassword, purpose: 'login' })).unwrap();
+      await dispatch(
+        requestOtp({ email: emailValue, password: loginPassword, purpose: 'login' })
+      ).unwrap();
       setResendCooldown(60);
-    } catch (e) {
-      // slice handles toast
-    }
+    } catch (_) {}
   };
 
   const handleResendVerification = async () => {
@@ -91,9 +88,7 @@ const Login = () => {
     try {
       await dispatch(resendVerificationEmail(emailValue)).unwrap();
       setResendCooldown(60);
-    } catch (e) {
-      // slice handles toast
-    } finally {
+    } catch (_) {} finally {
       setResendLoading(false);
     }
   };
@@ -116,277 +111,239 @@ const Login = () => {
 
   return (
     <AuroraScreen>
-      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        {/* Header */}
-        <div className="text-center">
-          <div className="mx-auto h-16 w-16 rounded-xl overflow-hidden mb-4 bg-white/10 backdrop-blur border border-white/15">
-            <img
-              src="/logo.png"
-              alt="PFIMS Logo"
-              className="h-16 w-16 object-contain"
-            />
-          </div>
-          <h2 className="text-3xl font-bold tracking-tight text-white">
-            Welcome back to PFIMS
-          </h2>
-          <p className="mt-2 text-sm text-white/60">
-            Sign in to your account to manage your finances
-          </p>
-        </div>
-
-        {/* Login Form */}
-        <AuroraCard accent="indigo" className="p-8">
-          <form className="space-y-6" onSubmit={handleFormSubmit}>
-            {/* Email Field */}
-            <div className="form-group">
-              <label htmlFor="email" className="form-label">
-                Email address
-              </label>
-              <input
-                {...emailRegister}
-                type="email"
-                id="email"
-                className={`input ${errors.email ? 'input-error' : ''}`}
-                placeholder="Enter your email"
-                autoComplete="email"
-                disabled={step === 'otp'}
-              />
-              {errors.email && (
-                <p className="form-error">{errors.email.message}</p>
-              )}
+      <div className="aurora-shell min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          {/* Header */}
+          <div className="text-center">
+            <div className="mx-auto h-16 w-16 rounded-2xl overflow-hidden mb-5 ring-1 ring-white/15 shadow-[0_18px_60px_-12px_rgba(99,102,241,0.6)]">
+              <img src="/logo.png" alt="PFIMS Logo" className="h-16 w-16 object-contain" />
             </div>
-
-            {/* Password Field */}
-            <div className="form-group">
-              <label htmlFor="password" className="form-label">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  {...register('password')}
-                  type={showPassword ? 'text' : 'password'}
-                  id="password"
-                  className={`input pr-10 ${errors.password ? 'input-error' : ''}`}
-                  placeholder="Enter your password"
-                  autoComplete="current-password"
-                  disabled={step === 'otp'}
-                />
-                <button
-                  type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  onClick={() => setShowPassword(!showPassword)}
-                  disabled={step === 'otp'}
-                >
-                  {showPassword ? (
-                    <EyeSlashIcon className="h-5 w-5 text-secondary-400" />
-                  ) : (
-                    <EyeIcon className="h-5 w-5 text-secondary-400" />
-                  )}
-                </button>
-              </div>
-              {errors.password && (
-                <p className="form-error">{errors.password.message}</p>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="otp" className="form-label">
-                Email OTP
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                id="otp"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
-                className="input"
-                placeholder="Enter the OTP"
-                autoComplete="one-time-code"
-                disabled={step !== 'otp'}
-              />
-            </div>
-
-            {/* Remember Me & Forgot Password */}
-            {step !== 'otp' && (
-              <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-secondary-700">
-                  Remember me
-                </label>
-              </div>
-
-              <div className="text-sm">
-                <Link
-                  to="/forgot-password"
-                  className="font-medium text-primary-600 hover:text-primary-500 transition-colors"
-                >
-                  Forgot your password?
-                </Link>
-              </div>
-              </div>
-            )}
-
-            {/* Submit Button */}
-            {step === 'credentials' ? (
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full btn-primary flex items-center justify-center"
+            <h2 className="text-4xl font-extrabold tracking-tight">
+              <span
+                className="bg-clip-text text-transparent"
+                style={{
+                  backgroundImage:
+                    'linear-gradient(120deg, #ffffff 0%, #c7d2fe 35%, #a5f3fc 65%, #ffffff 100%)',
+                }}
               >
-                {isLoading ? (
-                  <>
-                    <InlineSpinner size="sm" color="white" className="mr-2" />
-                    Sending OTP...
-                  </>
-                ) : (
-                  'Send OTP'
-                )}
-              </button>
-            ) : (
-              <div className="space-y-3">
+                Welcome back to PFIMS
+              </span>
+            </h2>
+            <p className="mt-3 text-sm text-white/60">
+              Sign in to your account to manage your finances
+            </p>
+          </div>
+
+          {/* Form Card */}
+          <AuroraCard accent="indigo" className="p-8">
+            <form className="space-y-5" onSubmit={handleFormSubmit}>
+              {/* Email Field — only editable in credentials step */}
+              <div className="form-group">
+                <label htmlFor="email" className="form-label block text-sm font-medium mb-1.5">
+                  Email address
+                </label>
+                <input
+                  {...emailRegister}
+                  type="email"
+                  id="email"
+                  className={`input w-full ${errors.email ? 'input-error' : ''}`}
+                  placeholder="Enter your email"
+                  autoComplete="email"
+                  disabled={step === 'otp'}
+                />
+                {errors.email && <p className="form-error">{errors.email.message}</p>}
+              </div>
+
+              {/* Password Field */}
+              {step === 'credentials' && (
+                <div className="form-group">
+                  <label htmlFor="password" className="form-label block text-sm font-medium mb-1.5">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      {...register('password')}
+                      type={showPassword ? 'text' : 'password'}
+                      id="password"
+                      className={`input w-full pr-11 ${errors.password ? 'input-error' : ''}`}
+                      placeholder="Enter your password"
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-white/50 hover:text-white/85"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  {errors.password && <p className="form-error">{errors.password.message}</p>}
+                </div>
+              )}
+
+              {/* OTP Field — only when in OTP step */}
+              {step === 'otp' && (
+                <div className="form-group">
+                  <label htmlFor="otp" className="form-label block text-sm font-medium mb-1.5">
+                    Email OTP
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    id="otp"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    className="input w-full tracking-[0.4em] text-center text-lg font-semibold"
+                    placeholder="Enter the 6-digit code"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                  />
+                  <p className="form-error !text-white/45 !mt-1">
+                    Sent to <span className="text-white/75">{emailValue}</span>. Check your inbox.
+                  </p>
+                </div>
+              )}
+
+              {/* Remember Me & Forgot Password */}
+              {step === 'credentials' && (
+                <div className="flex items-center justify-between pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      id="remember-me"
+                      name="remember-me"
+                      type="checkbox"
+                      className="peer sr-only"
+                    />
+                    <span
+                      aria-hidden
+                      className="h-4 w-4 rounded border border-white/30 bg-white/5 peer-checked:bg-gradient-to-br peer-checked:from-brand-indigo peer-checked:to-brand-pink peer-checked:border-transparent peer-focus-visible:ring-2 peer-focus-visible:ring-brand-indigo/60 transition-colors"
+                    />
+                    <span className="text-sm text-white/75 hover:text-white">Remember me</span>
+                  </label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-sm font-medium text-white/80 hover:text-white transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+              )}
+
+              {/* Submit */}
+              {step === 'credentials' ? (
                 <button
                   type="submit"
-                  disabled={isLoading || !otpCode}
-                  className="w-full btn-primary flex items-center justify-center"
+                  disabled={isLoading}
+                  className="btn-primary w-full flex items-center justify-center"
                 >
                   {isLoading ? (
                     <>
                       <InlineSpinner size="sm" color="white" className="mr-2" />
-                      Verifying...
+                      Sending OTP…
                     </>
                   ) : (
-                    'Verify & sign in'
+                    'Send OTP'
                   )}
                 </button>
-                <div className="flex items-center justify-between gap-3">
+              ) : (
+                <div className="space-y-3">
                   <button
-                    type="button"
-                    onClick={() => {
-                      setStep('credentials');
-                      setOtpCode('');
-                    }}
-                    className="text-sm font-medium text-secondary-600 hover:text-secondary-800 transition-colors"
+                    type="submit"
+                    disabled={isLoading || !otpCode}
+                    className="btn-primary w-full flex items-center justify-center"
                   >
-                    Change email/password
+                    {isLoading ? (
+                      <>
+                        <InlineSpinner size="sm" color="white" className="mr-2" />
+                        Verifying…
+                      </>
+                    ) : (
+                      'Verify & sign in'
+                    )}
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleResendOtp}
-                    disabled={resendCooldown > 0}
-                    className="text-sm font-medium text-primary-600 hover:text-primary-500 transition-colors disabled:opacity-50"
-                  >
-                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {requiresVerification && (
-              <div className="mt-4">
-                <p className="text-sm text-secondary-700 mb-2">
-                  Your email is not verified. Click below to resend the verification email.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleResendVerification}
-                  disabled={resendLoading || resendCooldown > 0 || !emailValue}
-                  className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
-                >
-                  {resendLoading ? (
-                    <>
-                      <InlineSpinner size="sm" color="white" className="mr-2" />
-                      Sending...
-                    </>
-                  ) : resendCooldown > 0 ? (
-                    `Resend in ${resendCooldown}s`
-                  ) : (
-                    'Resend verification email'
-                  )}
-                </button>
-              </div>
-            )}
-
-            {/* Error Message */}
-            {error && (
-              <div className="rounded-lg bg-danger-50 p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg
-                      className="h-5 w-5 text-danger-400"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep('credentials');
+                        setOtpCode('');
+                      }}
+                      className="font-medium text-white/60 hover:text-white transition-colors"
                     >
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-danger-800">{error}</p>
+                      ← Change email/password
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={resendCooldown > 0}
+                      className="font-medium text-white/80 hover:text-white transition-colors disabled:opacity-50"
+                    >
+                      {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
+                    </button>
                   </div>
                 </div>
-              </div>
-            )}
-          </form>
+              )}
 
-          {/* Sign Up Link */}
-          <div className="mt-6 text-center">
-            <p className="text-sm text-secondary-600">
-              Don't have an account?{' '}
-              <Link
-                to="/register"
-                className="font-medium text-primary-600 hover:text-primary-500 transition-colors"
-              >
-                Sign up for free
-              </Link>
+              {requiresVerification && (
+                <div className="rounded-xl bg-white/[0.04] border border-amber-300/30 p-4 text-sm text-amber-100">
+                  Your email isn't verified yet. We'll send a fresh verification link.
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendLoading || resendCooldown > 0 || !emailValue}
+                    className="mt-3 w-full inline-flex justify-center items-center rounded-lg bg-gradient-to-br from-amber-400 to-rose-400 px-4 py-2 text-zinc-900 font-semibold disabled:opacity-50"
+                  >
+                    {resendLoading
+                      ? 'Sending…'
+                      : resendCooldown > 0
+                      ? `Resend in ${resendCooldown}s`
+                      : 'Send verification email'}
+                  </button>
+                </div>
+              )}
+
+              {error && (
+                <div className="rounded-xl border border-rose-300/30 bg-rose-500/10 p-3 text-sm text-rose-100">
+                  {error}
+                </div>
+              )}
+            </form>
+
+            <div className="mt-6 pt-6 border-t border-white/10 text-center">
+              <p className="text-sm text-white/60">
+                Don't have an account?{' '}
+                <Link
+                  to="/register"
+                  className="font-semibold text-white hover:underline underline-offset-4 decoration-brand-cyan/70"
+                >
+                  Sign up for free
+                </Link>
+              </p>
+            </div>
+          </AuroraCard>
+
+          {/* Trust line */}
+          <div className="text-center space-y-3 pt-1">
+            <p className="text-xs text-white/45 tracking-wide">
+              Trusted by users worldwide · SOC2-grade security
             </p>
+            <div className="flex justify-center gap-5 text-[11px] text-white/55">
+              <span className="inline-flex items-center gap-1.5">
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Encrypted
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-brand-cyan" />
+                MFA-ready
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-brand-pink" />
+                Fast
+              </span>
+            </div>
           </div>
         </div>
-
-        {/* Features */}
-        <div className="text-center">
-          <p className="text-xs text-secondary-500 mb-4">
-            Trusted by thousands of users worldwide
-          </p>
-          <div className="flex justify-center space-x-6 text-xs text-secondary-400">
-            <div className="flex items-center">
-              <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Secure
-            </div>
-            <div className="flex items-center">
-              <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Verified
-            </div>
-            <div className="flex items-center">
-              <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-              </svg>
-              Fast
-            </div>
-          </div>
-        </AuroraCard>
-      </div>
       </div>
     </AuroraScreen>
   );
