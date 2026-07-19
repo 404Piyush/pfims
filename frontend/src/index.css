@@ -110,17 +110,54 @@
   .aurora-shell .btn-primary {
     background-image: linear-gradient(120deg, #6366f1 0%, #06b6d4 50%, #ec4899 100%);
     color: white;
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    font-family: "Geist", system-ui, -apple-system, sans-serif;
     font-weight: 600;
-    letter-spacing: 0.01em;
+    font-size: 0.95rem;
+    letter-spacing: -0.005em;
+    line-height: 1;
+    padding: 0.95rem 1.15rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 0.875rem;
-    padding: 0.75rem 1rem;
-    box-shadow: 0 14px 30px -10px rgba(99, 102, 241, 0.55), inset 0 1px 0 rgba(255,255,255,0.25);
+    box-shadow:
+      0 14px 30px -10px rgba(99, 102, 241, 0.55),
+      0 0 0 1px rgba(255,255,255,0.04) inset,
+      inset 0 1px 0 rgba(255,255,255,0.28);
     transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
   }
-  .aurora-shell .btn-primary:hover { transform: translateY(-1px); filter: brightness(1.05); }
+  .aurora-shell .btn-primary:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+    box-shadow:
+      0 18px 38px -12px rgba(236, 72, 153, 0.55),
+      0 0 0 1px rgba(255,255,255,0.08) inset,
+      inset 0 1px 0 rgba(255,255,255,0.32);
+  }
   .aurora-shell .btn-primary:active { transform: translateY(0); filter: brightness(0.95); }
   .aurora-shell .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+  .aurora-shell .btn-primary:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 4px rgba(99, 102, 241, 0.35),
+      0 14px 30px -10px rgba(99, 102, 241, 0.55);
+  }
+
+  /* Secondary / ghost button for aurora-shell */
+  .aurora-shell .btn-ghost {
+    background-color: rgba(255,255,255,0.05);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.18);
+    font-family: "Geist", system-ui, sans-serif;
+    font-weight: 500;
+    font-size: 0.95rem;
+    letter-spacing: -0.005em;
+    line-height: 1;
+    padding: 0.95rem 1.15rem;
+    border-radius: 0.875rem;
+    transition: background-color 140ms ease, transform 140ms ease;
+  }
+  .aurora-shell .btn-ghost:hover { background-color: rgba(255,255,255,0.10); transform: translateY(-1px); }
 
   body {
     font-family: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -141,6 +178,24 @@
   html {
     scroll-behavior: smooth;
   }
+
+  /* Aurora animations used by AuroraCard's halo + gradient border. */
+  @keyframes aurora-pan {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  @keyframes aurora-drift {
+    0%   { transform: translate3d(-2%, -1%, 0) scale(1.02) rotate(0deg); }
+    33%  { transform: translate3d(3%, 2%, 0)  scale(1.05) rotate(2deg); }
+    66%  { transform: translate3d(-2%, 3%, 0) scale(1.03) rotate(-2deg); }
+    100% { transform: translate3d(-2%, -1%, 0) scale(1.02) rotate(0deg); }
+  }
+  .animate-aurora-drift { animation: aurora-drift 14s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-aurora-drift { animation: none; }
+  }
+  .reduce-motion .animate-aurora-drift { animation: none; }
 
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }

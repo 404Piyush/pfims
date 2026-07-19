@@ -12,8 +12,12 @@ const ProtectedRoute = ({ children, requireEmailVerification = false }) => {
     return <LoadingSpinner fullScreen text="Checking authentication..." />;
   }
 
-  // Redirect to login if not authenticated
+  // Redirect to marketing home if not authenticated; remember where they
+  // were heading so we can bounce them back after login.
   if (!isAuthenticated) {
+    if (location.pathname === '/') {
+      return <Navigate to="/home" replace />;
+    }
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

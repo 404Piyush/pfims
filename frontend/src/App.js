@@ -33,6 +33,7 @@ import StockAnalysis from './pages/Stocks/StockAnalysis';
 
 // Error pages
 import NotFound from './pages/Error/NotFound';
+import Home from './pages/Home/Home';
 
 function App() {
   const dispatch = useDispatch();
@@ -60,6 +61,10 @@ function App() {
       <div className="App">
         <Routes>
           {/* Public routes */}
+            <Route
+              path="/home"
+              element={<Home />}
+            />
             <Route
               path="/login"
               element={
