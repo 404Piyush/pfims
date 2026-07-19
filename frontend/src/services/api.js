@@ -75,26 +75,29 @@ api.interceptors.response.use(
       toast.error('Network error. Please check your connection.');
       return Promise.reject(error);
     }
+    const url = response?.config?.url || '';
+    // Routes that must never trigger a "session expired" toast:
+    //   - auth endpoints handle their own UX
+    //   - /auth/me is the silent bootstrap check on app boot
+    const isAuthEndpoint =
+      url.includes('/auth/login') ||
+      url.includes('/auth/register') ||
+      url.includes('/auth/otp/') ||
+      url.includes('/auth/refresh') ||
+      url.includes('/auth/me');
     switch (response.status) {
       case 401:
         localStorage.removeItem('pfims.token.legacy');
-        {
-          const url = response?.config?.url || '';
-          const isAuthRequest =
-            url.includes('/auth/login') ||
-            url.includes('/auth/register') ||
-            url.includes('/auth/otp/');
-          if (!isAuthRequest) {
-            toast.error('Session expired. Please login again.');
-            navigateTo('/login');
-          }
+        if (!isAuthEndpoint) {
+          toast.error('Session expired. Please login again.');
+          navigateTo('/login');
         }
         break;
       case 403:
         toast.error('You do not have permission to perform this action.');
         break;
       case 404:
-        if (!response.config.url.includes('/auth/me')) {
+        if (!url.includes('/auth/me')) {
           toast.error('Resource not found.');
         }
         break;

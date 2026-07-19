@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { checkAuth } from './store/slices/authSlice';
@@ -37,8 +37,13 @@ import NotFound from './pages/Error/NotFound';
 function App() {
   const dispatch = useDispatch();
   const { isBootstrapping } = useSelector((state) => state.auth);
+  // React.StrictMode double-invokes effects in dev. Gate checkAuth behind a
+  // ref so we only fire the boot session probe once per mount.
+  const bootCheckedRef = useRef(false);
 
   useEffect(() => {
+    if (bootCheckedRef.current) return;
+    bootCheckedRef.current = true;
     dispatch(checkAuth());
   }, [dispatch]);
 
